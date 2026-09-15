@@ -1,0 +1,40 @@
+"""Domain constants and schema limits."""
+
+# Canonical Schema Version
+CURRENT_SCHEMA_VERSION: str = "1.0"
+
+# Presentation & Slide Bounds
+MAX_PRESENTATION_TITLE_LENGTH: int = 200
+MAX_PRESENTATION_TOPIC_LENGTH: int = 1000
+MIN_SLIDES_COUNT: int = 1
+MAX_SLIDES_COUNT: int = 50
+
+MAX_SLIDE_TITLE_LENGTH: int = 150
+MAX_SLIDE_SUBTITLE_LENGTH: int = 300
+MAX_ELEMENTS_PER_SLIDE: int = 30
+MAX_SPEAKER_NOTES_LENGTH: int = 2000
+
+# Content Item Bounds
+MAX_CARD_TITLE_LENGTH: int = 100
+MAX_CARD_BODY_LENGTH: int = 800
+MAX_KPI_LABEL_LENGTH: int = 60
+MAX_KPI_VALUE_LENGTH: int = 30
+
+# Chart Bounds
+MAX_CHART_SERIES: int = 10
+MAX_CHART_POINTS: int = 30
+MAX_CHART_TITLE_LENGTH: int = 150
+
+# Table Bounds
+MAX_TABLE_COLUMNS: int = 10
+MAX_TABLE_ROWS: int = 20
+MAX_TABLE_CELL_LENGTH: int = 200
+
+# Process & Timeline Bounds
+MAX_PROCESS_STEPS: int = 10
+MAX_TIMELINE_MILESTONES: int = 12
+
+# Canvas Virtual Units (16:9 Standard)
+DEFAULT_CANVAS_WIDTH: int = 1920
+DEFAULT_CANVAS_HEIGHT: int = 1080
+DEFAULT_ASPECT_RATIO: str = "16:9"

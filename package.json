@@ -1,0 +1,13 @@
+{
+  "name": "ai-presentation-generator-root",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "preview": "npm run preview --prefix frontend",
+    "lint": "npm run lint --prefix frontend",
+    "test:backend": "python -m pytest backend/tests -v",
+    "backend": "uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload"
+  }
+}
