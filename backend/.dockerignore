@@ -1,0 +1,47 @@
+# ==============================================================================
+# Docker Ignore Rules for Backend Build Context
+# ==============================================================================
+
+# Version Control & IDE
+.git
+.github
+.gitignore
+.gitattributes
+.vscode
+.idea
+.gemini
+
+# Python Virtual Environments & Packages
+.venv
+venv
+ENV
+env
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Testing & Quality Assurance
+.pytest_cache
+.coverage
+htmlcov
+.tox
+.mypy_cache
+.ruff_cache
+
+# Environment & Secrets (NEVER bake into image)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local Data, Logs & Artifacts
+temp/
+tests/
+test_output/
+*.pptx
+*.log

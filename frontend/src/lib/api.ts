@@ -2,7 +2,13 @@
  * Reusable HTTP API Client.
  */
 
-import { ApiErrorResponse, HealthResponse, PresentationFormState } from '@/types';
+import {
+  ApiErrorResponse,
+  GenerationJobResponse,
+  HealthResponse,
+  JobStatusResponse,
+  PresentationFormState,
+} from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -29,9 +35,13 @@ export class ApiClientError extends Error {
 }
 
 /**
- * Base HTTP request wrapper with structured error handling.
+ * Base HTTP request wrapper with structured error handling and finite timeout.
  */
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {},
+  timeoutMs: number = 30000
+): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   const headers = new Headers(options.headers || {});
 
@@ -39,10 +49,14 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers.set('Content-Type', 'application/json');
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const response = await fetch(url, {
       ...options,
       headers,
+      signal: options.signal || controller.signal,
     });
 
     const requestId = response.headers.get('X-Request-ID') || undefined;
@@ -74,31 +88,69 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     if (err instanceof ApiClientError) {
       throw err;
     }
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new ApiClientError('Request timed out. Please check your connection and try again.', 408, 'REQUEST_TIMEOUT');
+    }
     const message = err instanceof Error ? err.message : 'Network error occurred';
     throw new ApiClientError(message, 0, 'NETWORK_ERROR');
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
+
 
 /**
  * API Client functions.
  */
-export const api = {
-  /**
-   * Health check endpoint.
-   */
-  async getHealth(): Promise<HealthResponse> {
-    return request<HealthResponse>('/health');
-  },
+export async function getHealth(): Promise<HealthResponse> {
+  return request<HealthResponse>('/health');
+}
 
-  /**
-   * Presentation generation boundary.
-   * Note: The generation backend will be integrated in Phase 4/10.
-   */
-  async createGenerationJob(_data: PresentationFormState): Promise<{ jobId: string }> {
-    throw new ApiClientError(
-      'The presentation generation backend pipeline will be connected in future phases. No fake generation was executed.',
-      501,
-      'NOT_IMPLEMENTED'
-    );
-  },
+export async function createGenerationJob(data: PresentationFormState): Promise<GenerationJobResponse> {
+  const slideCountNum = data.slideCount === 'auto' ? 8 : parseInt(data.slideCount, 10) || 8;
+
+  if (data.mode === 'reference' && data.referenceFile) {
+    const formData = new FormData();
+    formData.append('mode', 'reference');
+    formData.append('topic', data.topic);
+    formData.append('audience', data.audience);
+    formData.append('purpose', data.purpose);
+    formData.append('slide_count', String(slideCountNum));
+    formData.append('style', data.style);
+    formData.append('reference_file', data.referenceFile);
+
+    return request<GenerationJobResponse>('/api/generate', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  return request<GenerationJobResponse>('/api/generate', {
+    method: 'POST',
+    body: JSON.stringify({
+      mode: data.mode,
+      topic: data.topic,
+      audience: data.audience,
+      purpose: data.purpose,
+      slide_count: slideCountNum,
+      style: data.style,
+    }),
+  });
+}
+
+export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {
+  return request<JobStatusResponse>(`/api/jobs/${jobId}`);
+}
+
+export function getDownloadUrl(jobId: string): string {
+  return `${API_BASE_URL}/api/download/${jobId}`;
+}
+
+export const api = {
+  getHealth,
+  createGenerationJob,
+  getJobStatus,
+  getDownloadUrl,
 };
+
+

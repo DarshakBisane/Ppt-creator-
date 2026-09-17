@@ -4,187 +4,284 @@ Production-grade web application platform that generates editable, professionall
 
 ---
 
-## Architecture Overview
+## 1. System Architecture
 
 ```text
-[ Browser / React + TypeScript + Tailwind CSS (Vite) ]
-                         │
-                         ▼ (HTTP REST / SSE Correlation)
-            [ FastAPI API Gateway ]
-                         │
-       ┌─────────────────┼─────────────────┐
-       ▼                 ▼                 ▼
-[ Request ID / Log ] [ Config / CORS ] [ Health Check ]
-                         │
-                         ▼
-        [ AI Orchestration Layer (Phase 4) ]
-       ┌─────────────────┴─────────────────┐
-       ▼                                   ▼
-[ GeminiProvider (google-genai) ]  [ FakeAIProvider (Offline / Testing) ]
-       │
-       ▼ (Native Structured JSON Schema)
-[ Presentation Domain Schema (Phase 3) ]
-       │
-       ▼ (Future Phases)
-[ Deterministic Layout Engine ──► Native PPTX Renderer ──► Visual QA ]
+                                 ┌─────────────────────────────────────────┐
+                                 │     Browser / React 19 + TypeScript     │
+                                 │  Tailwind CSS v4 • Lucide • Vite Build  │
+                                 └────────────────────┬────────────────────┘
+                                                      │ (HTTP / JSON / Multipart)
+                                                      ▼
+                                 ┌─────────────────────────────────────────┐
+                                 │       FastAPI Gateway & Middleware      │
+                                 │  RequestId • Strict CORS • JSON Logger  │
+                                 └────────────────────┬────────────────────┘
+                                                      │
+                         ┌────────────────────────────┼────────────────────────────┐
+                         ▼                            ▼                            ▼
+                 [ Health Check ]           [ MemoryJobStore ]             [ ArtifactStorage ]
+                 GET /health (Fast)       (Process-Local 1-Worker)         (Sandboxed OpenXML)
+                         │                            │                            │
+                         │                            ▼                            │
+                         │             [ Generation Orchestrator ]                 │
+                         │                            │                            │
+                         │            ┌───────────────┴───────────────┐            │
+                         │            ▼                               ▼            │
+                         │   [ Mode A: Topic ]              [ Mode B: Reference ]  │
+                         │            │                     (Safe Package Parser)  │
+                         │            ▼                               │            │
+                         │   [ Gemini AI Orchestration ] ◄────────────┘            │
+                         │   (google-genai / Structured JSON)                      │
+                         │            │                                            │
+                         │            ▼                                            │
+                         │   [ Semantic Visual Selector ]                          │
+                         │   (25 Archetypes • Deck Budget • Motif Weights)         │
+                         │            │                                            │
+                         │            ▼                                            │
+                         │   [ Deterministic Layout Engine ]                       │
+                         │   (1920x1080 Canonical Space • EMU Conversion)          │
+                         │            │                                            │
+                         │            ▼                                            │
+                         │   [ Visual QA & Repair Engine ]                         │
+                         │   (3-Pass Monotonic Correction • Bounds & Overlap)      │
+                         │            │                                            │
+                         │            ▼                                            │
+                         │   [ Native OpenXML PPTX Renderer ]                      │
+                         │   (python-pptx • 100% Native Shapes/Charts/Tables)      │
+                         │            │                                            │
+                         └────────────┼────────────────────────────────────────────┘
+                                      ▼
+                        [ Downloadable Native .pptx ]
 ```
 
-- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, Lucide Icons.
-- **Backend**: Python 3.14+, FastAPI, Pydantic v2, Google GenAI SDK (`google-genai`), Starlette Middleware, Structured JSON Logging.
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, Lucide Icons, Vitest, Nginx SPA container.
+- **Backend**: Python 3.14 / 3.12, FastAPI, Uvicorn, Pydantic v2, `google-genai` SDK, `python-pptx`, Pillow, Pytest.
+- **AI Planning**: Google Gemini (`gemini-2.5-flash`) with native structured JSON schema enforcement and offline `FakeAIProvider`.
+- **Presentation Output**: 100% native OpenXML presentation objects (shapes, connectors, tables, native charts, typography). Zero full-slide rasterization.
 
 ---
 
-## Requirements
+## 2. Environment Variables Reference
 
+| Variable | Required | Default | Purpose | Example / Format |
+| :--- | :---: | :--- | :--- | :--- |
+| `GEMINI_API_KEY` | **Yes** (Prod) | *None* | Google Gemini AI Studio API key | `AQ.Ab8RN6...` |
+| `ENVIRONMENT` | No | `development` | Runtime environment (`development`, `test`, `production`) | `production` |
+| `APP_NAME` | No | `"AI Presentation Generator"` | Application display name | `"PresenAI"` |
+| `API_HOST` | No | `127.0.0.1` | Network interface for FastAPI to bind | `0.0.0.0` |
+| `API_PORT` | No | `8000` | Port for FastAPI server | `8000` |
+| `LOG_LEVEL` | No | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `INFO` |
+| `CORS_ORIGINS` | No | `http://localhost:5173,...` | Allowed CORS origins (comma-separated or JSON list) | `http://localhost:3000,https://app.example.com` |
+| `ENABLE_DOCS` | No | `false` in prod | Enable `/docs` and `/redoc` in production | `false` |
+| `GEMINI_MODEL` | No | `gemini-2.5-flash` | Gemini model variant | `gemini-2.5-flash` |
+| `AI_TIMEOUT_SECONDS` | No | `60.0` | Timeout threshold for AI planning calls | `60.0` |
+| `AI_MAX_ATTEMPTS` | No | `2` | 1-pass auto-recovery retry budget | `2` |
+| `ARTIFACT_DIR` | No | `temp/artifacts` | Sandboxed storage directory for generated PPTX files | `/app/temp/artifacts` |
+| `ARTIFACT_TTL_SECONDS`| No | `3600` | Expiration time for temporary artifacts in seconds | `3600` |
+| `MAX_CONCURRENT_JOBS` | No | `5` | Semaphore bounding concurrent generation jobs | `5` |
+| `MAX_JOB_RUNTIME_SECONDS` | No | `300` | Stuck-job watchdog timeout limit in seconds | `300` |
+| `VITE_API_BASE_URL` | No (Frontend)| `""` (relative) | Backend API endpoint used by the React web app | `http://localhost:8000` |
+
+> [!WARNING]
+> **Security Guardrail**: `GEMINI_API_KEY` is strictly backend-only. Never expose private credentials in `frontend/.env` or build arguments. Only `VITE_*` prefixed variables are bundled into client-side assets.
+
+---
+
+## 3. Local Development Setup
+
+### Prerequisites
 - **Python**: 3.14+ (or 3.12+)
-- **Node.js**: v20+ (tested on v24.19.0)
-- **npm**: v10+ (tested on v11.17.0)
+- **Node.js**: v20+
+- **npm**: v10+
 
----
-
-## Getting Started
-
-### 1. Backend Setup
-
+### Step 1: Clone Repository
 ```bash
-# Navigate to backend directory
-cd backend
+git clone https://github.com/DarshakBisane/Ppt-creator-.git
+cd Ppt-creator-
+```
 
-# (Optional) Create and activate virtual environment
+### Step 2: Backend Setup & Execution
+```bash
+# 1. Create and activate virtual environment
 python -m venv .venv
+
 # Windows:
 .venv\Scripts\activate
-# Linux/macOS:
+# Linux / macOS:
 source .venv/bin/activate
 
-# Install dependencies
-pip install -r requirements.txt
+# 2. Install dependencies
+pip install -r backend/requirements.txt
 
-# Configure environment variables
-cp .env.example .env
+# 3. Configure backend environment
+cp backend/.env.example backend/.env
+# (Edit backend/.env and set your GEMINI_API_KEY)
 
-# Run FastAPI development server
-uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+# 4. Start FastAPI server
+python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Backend API will be accessible at: `http://127.0.0.1:8000`
-Health Endpoint: `http://127.0.0.1:8000/health`
-Interactive API Docs: `http://127.0.0.1:8000/docs`
+- Backend API: `http://127.0.0.1:8000`
+- Health Check: `http://127.0.0.1:8000/health`
+- Swagger Docs (Dev Mode): `http://127.0.0.1:8000/docs`
 
-#### Environment Configuration
-
-Add the following to your backend `.env`:
-
-```env
-# AI Provider Configuration
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
-AI_TIMEOUT_SECONDS=60.0
-AI_MAX_ATTEMPTS=2
-```
-
-> **Security Note**: `GEMINI_API_KEY` is strictly backend-only and is never committed or exposed to the frontend browser bundle.
-
----
-
-### 2. Frontend Setup
-
+### Step 3: Frontend Setup & Execution
 ```bash
-# Navigate to frontend directory
 cd frontend
 
-# Install dependencies
+# 1. Install dependencies
 npm install
 
-# Configure environment variables
+# 2. Configure frontend environment
 cp .env.example .env
 
-# Run development server
+# 3. Start development server
 npm run dev
 ```
 
-Frontend will be accessible at: `http://localhost:5173`
+- Frontend Studio: `http://localhost:5173`
 
 ---
 
-## Testing & Quality Assurance
+## 4. Docker Containerization & Orchestration
 
-### Run Backend Tests
+### A. Docker Compose (Full Stack)
+To run both frontend and backend in production-configured Docker containers:
 
 ```bash
-# From workspace root:
+# 1. Configure environment variables in root .env
+cp .env.example .env
+# Edit .env to set GEMINI_API_KEY
+
+# 2. Build and run containers
+docker compose up --build -d
+
+# 3. Verify container status and health
+docker compose ps
+docker compose logs -f
+```
+
+- Frontend App: `http://localhost:3000`
+- Backend Health: `http://localhost:8000/health`
+
+### B. Building Backend Container Manually
+```bash
+docker build -t presenai-backend:latest -f backend/Dockerfile backend/
+
+docker run -d \
+  --name presenai-backend \
+  -p 8000:8000 \
+  -e GEMINI_API_KEY="your_gemini_api_key_here" \
+  -e ENVIRONMENT="production" \
+  presenai-backend:latest
+```
+
+### C. Building Frontend Container Manually
+```bash
+docker build \
+  --build-arg VITE_API_BASE_URL="http://localhost:8000" \
+  -t presenai-frontend:latest \
+  -f frontend/Dockerfile frontend/
+
+docker run -d \
+  --name presenai-frontend \
+  -p 3000:80 \
+  presenai-frontend:latest
+```
+
+---
+
+## 5. Production Deployment Architecture
+
+### Frontend (Static SPA Hosting)
+- Build static production assets:
+  ```bash
+  cd frontend
+  npm run build
+  ```
+- Output directory: `frontend/dist`
+- Deploy to any static file hosting service (Nginx, AWS S3 + CloudFront, Vercel, Cloudflare Pages).
+- Ensure SPA fallback routing is configured (`try_files $uri $uri/ /index.html;` or redirect all non-file routes to `/index.html`).
+
+### Backend (FastAPI Service)
+- Production startup command:
+  ```bash
+  uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --workers 1
+  ```
+- Healthcheck Endpoint: `GET /health`
+
+---
+
+## 6. Architecture & Scaling Constraints
+
+> [!IMPORTANT]
+> **Single-Worker Process-Local Architecture**:
+> The application uses an in-memory thread-safe `MemoryJobStore` for tracking presentation generation lifecycle states (`QUEUED` $\to$ `PLANNING` $\to$ `DESIGNING` $\to$ `QA` $\to$ `RENDERING` $\to$ `COMPLETED`).
+> 
+> Therefore:
+> - The production backend **must run as a single process/worker (`--workers 1`)**.
+> - Configuring multiple uvicorn worker processes will partition in-memory job state across OS process boundaries, leading to 404s during job status polling.
+> - Horizontal scaling across multiple worker instances requires a shared persistent job store (e.g. distributed store/Redis) and is explicitly out of scope for Phase 12.
+
+---
+
+## 7. Artifact Storage & Lifecycle Management
+
+- **Storage Sandboxing**: All generated presentations are saved in isolated directories under `temp/artifacts/{job_id}/{sanitized_filename}.pptx`.
+- **Path Traversal Defense**: Strict filename and job ID sanitization defangs `..`, `/`, `\`, and absolute drive paths.
+- **OpenXML Verification**: Every generated payload is validated as a legitimate OpenXML zip package before writing to disk and before download.
+- **Ephemeral Storage**: In containerized environments, generated artifacts reside in the `/app/temp/artifacts` directory (or named docker volume `artifacts_data`).
+- **TTL Cleanup**: Artifacts older than `ARTIFACT_TTL_SECONDS` (default: 1 hour) are automatically purged. Container restarts will discard ephemeral artifacts unless an external volume is mounted.
+
+---
+
+## 8. Testing & Validation
+
+### Run Complete Backend Test Suite
+```bash
 python -m pytest backend/tests -v
 ```
+*Current test suite: **266 tests**, 100% pass rate covering API endpoints, AI prompts, FakeAIProvider, LayoutEngine, Visual QA, Reference PPT Analyzer, Hardening limits, and Deployment configurations.*
 
-### Run Frontend Build & Type Check
-
+### Run Frontend Unit Tests
 ```bash
-# From frontend directory:
 cd frontend
 npm test
-npm run build
 ```
+*Vitest suite: **10 tests**, 100% pass rate covering Studio UI, Mode A / Mode B switches, input validation, and pipeline transitions.*
+
+### Run Live Mode A & Mode B Smoke Tests
+```bash
+python scratch/run_live_smoke_tests.py
+```
+*Validates real Gemini API generation, OpenXML package integrity, slide counts, and native editable shapes.*
 
 ---
 
-## Current Status: Phase 8 — Semantic Visual Selection Intelligence Completed
+## 9. Troubleshooting Guide
 
-### Implemented in Phases 1 through 8:
-
-- [x] **FastAPI Application Factory & Architecture (Phase 1)**: CORS, correlation ID tracking (`X-Request-ID`), structured logging, `/health` endpoint.
-- [x] **Landing Experience & Studio UI (Phase 2)**: Dual creation workflows (Mode A: Topic Creation, Mode B: Reference PPT Uploader), settings panel, progress & gallery shells, light/dark mode switcher.
-- [x] **Presentation Domain Layer (Phase 3)**:
-  - **Strict AI vs. Geometry Separation**: AI schemas describe semantics, narrative flow, visual archetypes, content blocks, charts, tables, and design tokens without raw physical coordinates or EMUs.
-  - **Schema Versioning**: Canonical version `CURRENT_SCHEMA_VERSION = "1.0"` with strict integrity validation.
-  - **Controlled Vocabularies (`enums.py`)**: `NarrativeRole` (14 roles), `VisualType` (25 archetypes), `ElementType` (15 types), `DataSource`, `TimelineStatus`, `TokenSource`, `Density`.
-  - **Design System Models (`design_system.py`)**: `ColorToken` (hex validation + confidence scores), `Palette` (semantic roles), `TypographySystem`, `ShapeStyle`, `SpacingScale`, `LayoutPreferences`.
-  - **Structured Data Models**: `ChartData` (matching series/categories + provenance tracking), `TableData` (matching row/column cells), `TimelineData`, `ProcessFlowData`.
-  - **Root Presentation Schema (`presentation.py`)**: `Presentation`, `PresentationMetadata`, `Slide`, `Element` with duplicate ID prevention and sequential index validation.
-  - **Job Lifecycle Schemas (`jobs.py`)**: `JobState`, `JobProgress`, `JobError`.
-- [x] **AI Orchestration Layer (Phase 4)**:
-  - **Provider Abstraction (`AIProvider`)**: Clean protocol interface decoupling the planning domain from specific AI SDKs.
-  - **Production Gemini Provider (`GeminiProvider`)**: Official modern `google-genai` SDK integration utilizing native JSON structured output (`response_schema=Presentation`).
-  - **Prompt Architecture (`PromptBuilder`)**: Modular prompt constructor with strict system instructions, narrative progression rules, anti-hallucination data integrity rules, and visual archetype guidance.
-  - **Security & Injection Defense**: Untrusted user topics and reference PPT tokens are quarantined within `<user_topic>` and `<reference_untrusted_data>` delimiters with strict system override prohibitions.
-  - **1-Pass Auto-Recovery (`OnePassRecoveryHandler`)**: Automatic error formatting and single-attempt repair prompt on schema mismatch, strictly capped at `MAX_AI_ATTEMPTS = 2`.
-  - **Deterministic Fake AI Provider (`FakeAIProvider`)**: Full offline / test provider generating rich, validated `Presentation` blueprints with multi-slide visual diversity (`process_flow`, `timeline`, `kpi`, `card_grid`, `column_chart`, `table`).
-- [x] **Native PPTX Rendering Engine (Phase 5)**:
-  - Native OpenXML shape and typography rendering (`python-pptx`).
-  - Native tables (`add_table`), native charts (`add_chart`), native connectors, and formatted speaker notes.
-  - Zero full-slide rasterization; 100% editable OpenXML objects.
-- [x] **Deterministic Layout Engine & 18 Layout Archetypes (Phase 6)**:
-  - **Canonical 16:9 Canvas**: Abstract virtual coordinate space (1920 × 1080) with centralized EMU conversion (`EMU = round(virtual_unit * 6350)`).
-  - **Mathematical Determinism**: Zero float drift, identical pixel coordinates on every repeated execution.
-  - **18 Layout Archetypes**: Blank/Freeform, Title+Body, Hero, Two-Column, Three-Card Row, Four-Card Grid, KPI Dashboard, Split Comparison, Timeline, Process Flow, Flowchart, Hierarchy Tree, Architecture Diagram, 2x2 Matrix, Table + Summary, Chart + Insight, Quote, and Roadmap.
-  - **Constraint & Boundary Validation**: Canvas containment checks, non-negative dimension assertions, child-in-parent boundary validation, and structured `LayoutWarning` items.
-  - **Text Fitting & Metrics**: PIL font measurement with responsive container expansion (up to 15%) and minimum font threshold protection (14pt body, 11pt caption).
-  - **Connector Port System**: Deterministic attachment ports on container borders (top, bottom, left, right, center).
-- [x] **Reference PPT Intelligence Analyzer (Phase 7 — Mode B Foundation)**:
-  - **Safe OpenXML Package Inspector (`SafePPTXPackage`)**: Safe ZIP bounds (max 500 files, max 50MB uncompressed), path traversal rejection, and pre-scan DTD/XXE entity defenses (`safe_parse_xml`).
-  - **Color & Palette Extractor (`ColorExtractor`)**: Extracts theme color schemes (`clrScheme`), slide background fills (`<p:bg>`), full-bleed background shapes, text run fills, and synthesizes semantic `Palette` with ITU-R BT.709 luminance calculations and confidence scoring.
-  - **Typography Extractor (`FontExtractor`)**: Extracts theme font schemes (`fontScheme`), slide run typefaces, heading vs body font frequency by size distribution, and synthesizes canonical `TypographySystem`.
-  - **Shape & Geometry Extractor (`ShapeExtractor`)**: Analyzes preset geometries (`prstGeom`), corner radius preferences (12pt rounded vs 0pt crisp rectangular), stroke widths, and synthesizes `ShapeStyle`.
-  - **Spacing & Density Extractor (`SpacingExtractor`)**: Analyzes shape density per slide, infers `Density` (`LOW`, `MEDIUM`, `HIGH`) and `WhitespacePreference`.
-  - **Recurring Visual Motif Detector (`MotifDetector`)**: Heuristically detects tables, charts, process flows, timelines, card grids, KPI metrics, and comparison layouts.
-  - **Sanitized AI Boundary**: ZERO slide body text, titles, speaker notes, proprietary text, or malicious prompt-injection payloads are ever leaked into the output `DesignSystem` or `DesignContext`.
-- [x] **Semantic Visual Selection Intelligence (Phase 8)**:
-  - **Content Semantic Classifier (`ContentSemanticClassifier`)**: Multi-signal detection across 10 categories (Temporal, Sequential, Hierarchical, Comparative, Quantitative, Relational, Tabular, Key Statement, Categorical, Prose).
-  - **Deterministic Rule Engine (`VisualScoringEngine`)**: Multi-factor scoring balancing semantic match, narrative role match, data compatibility, reference motif bonuses, and deck visual budget repetition penalties.
-  - **Canonical VisualType $\to$ Archetype Mapping (`ARCHETYPE_MAPPINGS`)**: Maps all 25 Phase 3 visual types to registered Phase 6 layout archetype resolvers with deterministic preferred and fallback options.
-  - **Conservative Visual Data Builder (`VisualDataBuilder`)**: Safely synthesizes `TimelineData`, `ProcessFlowData`, `TableData`, and `ChartData` with data validation and anti-hallucination labeling (`DataProvenance.ILLUSTRATIVE`).
-  - **Deck-Level Visual Budget (`DeckVisualBudget`)**: Enforces slide-level visual diversity, caps consecutive identical card layouts, and balances deck narrative progression.
-  - **End-to-End Integration**: Seamlessly bridges Phase 4 AI planning with Phase 6 LayoutEngine and Phase 5 PPTX Renderer with 100% deterministic test coverage.
-- [x] **Automated Test Suite**: **144 backend tests** (`pytest`) covering visual intelligence classification, scoring, negative cases, data validation, reference motif weighting, determinism, layout archetypes, canvas conversion, geometry constraints, AI prompts, fake provider, and domain schemas + **10 frontend UI unit tests** (`vitest`).
-- [x] **Production Build Verification**: Full TypeScript compilation and asset bundling verified with zero errors.
+| Issue | Root Cause | Resolution |
+| :--- | :--- | :--- |
+| `API returns 500: AI generation failed` | Missing or invalid `GEMINI_API_KEY` | Ensure `GEMINI_API_KEY` is set in `.env` or container environment. Test with `FakeAIProvider` by setting `ENVIRONMENT=test`. |
+| `CORS error in browser console` | Origin not whitelisted | Add your frontend URL (e.g. `http://localhost:3000`) to `CORS_ORIGINS` in `.env`. |
+| `404 Not Found on /api/jobs/{id}` | Multiple workers or expired TTL | Ensure backend runs with `--workers 1`. Verify `ARTIFACT_TTL_SECONDS`. |
+| `Cannot connect to Docker daemon` | Docker Desktop daemon is not running | Start the Docker Desktop application / system service, or execute using direct local Python/Node commands. |
+| `Swagger /docs returns 404` | Docs disabled in production | Set `ENABLE_DOCS=true` in `.env` if API documentation is needed in production. |
 
 ---
 
-## Roadmap & Next Phase
+## 10. Implementation Status Summary
 
-- **Next Up: Phase 9 — Visual QA & 3-Pass Auto-Correction Engine**
-- Phase 10: Asynchronous Job Pipeline & Download Delivery
-- Phase 11: Real-Time SSE Streaming & Visual Canvas Diagnostics
-- Phase 12: Production Hardening, Rate Limiting & Cloud Packaging
-
-#   P p t - c r e a t o r -  
- 
+- [x] **Phase 1**: FastAPI Application Factory, Request ID Middleware, Structured Logging, Health Check.
+- [x] **Phase 2**: Landing Page & Presentation Studio UI (Mode A Topic + Mode B Reference PPT).
+- [x] **Phase 3**: Presentation Domain Layer, Strict AI/Geometry Separation, Schemas & Enums.
+- [x] **Phase 4**: AI Orchestration Layer (`GeminiProvider`, `PromptBuilder`, 1-Pass Auto-Recovery, `FakeAIProvider`).
+- [x] **Phase 5**: Native OpenXML PPTX Rendering Engine (`python-pptx`, native shapes, tables, charts, zero rasterization).
+- [x] **Phase 6**: Deterministic Layout Engine & 18 Layout Archetypes (1920x1080 canonical space, EMU conversion).
+- [x] **Phase 7**: Reference PPT Intelligence Analyzer (Safe package extractor, palette, typography, shape style extractor).
+- [x] **Phase 8**: Semantic Visual Selection Intelligence (10 semantic categories, rule engine, visual budget).
+- [x] **Phase 9**: Visual QA & 3-Pass Auto-Correction Engine (Boundary, text overflow, overlap, and monotonicity guarantees).
+- [x] **Phase 10**: Asynchronous Job Pipeline & Download Delivery (`MemoryJobStore`, `ArtifactStorage`, FileResponse).
+- [x] **Phase 11**: Production Hardening, Rate Limiting, Request Bounds, XML entity defense & Security Defenses.
+- [x] **Phase 12**: Deployment & Containerization (Dockerfiles, Docker Compose, Nginx SPA, Environment standard, Full tests).

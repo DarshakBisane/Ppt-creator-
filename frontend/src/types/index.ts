@@ -108,3 +108,39 @@ export interface DiagnosticsSummary {
 
 export type Theme = 'dark' | 'light';
 export type ActiveTab = 'landing' | 'studio';
+
+// ----------------------------------------------------------------------
+// Phase 10 API Contracts
+// ----------------------------------------------------------------------
+
+export interface ArtifactInfo {
+  filename: string;
+  download_url: string;
+  size_bytes: number;
+  slide_count: number;
+}
+
+export interface JobErrorResponse {
+  code: string;
+  message: string;
+  retryable: boolean;
+}
+
+export interface JobStatusResponse {
+  job_id: string;
+  state: string;
+  progress: number;
+  stage: string;
+  message: string;
+  created_at: string;
+  updated_at: string;
+  artifact: ArtifactInfo | null;
+  error: JobErrorResponse | null;
+}
+
+export interface GenerationJobResponse {
+  job_id: string;
+  state: string;
+  status_url: string;
+}
+

@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,11 @@ class AppException(Exception):
         self.code = code
         self.message = message
         self.details = details
+
+    @property
+    def error_code(self) -> str:
+        """Alias for code property for backwards/forwards compatibility."""
+        return self.code
 
 
 class BadRequestException(AppException):
@@ -99,12 +105,195 @@ class InternalServerException(AppException):
         )
 
 
+# =====================================================================
+# Domain Pipeline Exceptions
+# =====================================================================
+
+class AIProviderError(AppException):
+    """Base exception for all AI provider and orchestration failures."""
+
+    def __init__(
+        self,
+        message: str = "An error occurred during AI presentation orchestration.",
+        code: str = "AI_PROVIDER_ERROR",
+        status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
+        details: list[dict[str, Any]] | None = None,
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(
+            status_code=status_code,
+            code=code,
+            message=message,
+            details=details,
+        )
+        self.retryable = retryable
+
+
+class SemanticSelectionError(AppException):
+    """Raised when semantic archetype selection fails."""
+
+    def __init__(self, message: str = "Failed to select appropriate visual archetypes.", details: list[dict[str, Any]] | None = None) -> None:
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code="SEMANTIC_SELECTION_ERROR",
+            message=message,
+            details=details,
+        )
+
+
+class LayoutError(AppException):
+    """Raised when 1920x1080 layout geometry computation fails."""
+
+    def __init__(self, message: str = "Failed to compute layout coordinates.", details: list[dict[str, Any]] | None = None) -> None:
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code="LAYOUT_ERROR",
+            message=message,
+            details=details,
+        )
+
+
+class VisualQAError(AppException):
+    """Raised when visual quality assurance validation or repair fails."""
+
+    def __init__(self, message: str = "Visual quality inspection and repair failed.", details: list[dict[str, Any]] | None = None) -> None:
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code="VISUAL_QA_ERROR",
+            message=message,
+            details=details,
+        )
+
+
+class RenderingError(AppException):
+    """Raised when OpenXML PPTX rendering fails."""
+
+    def __init__(self, message: str = "Failed to render PowerPoint OpenXML document.", details: list[dict[str, Any]] | None = None) -> None:
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code="RENDERING_ERROR",
+            message=message,
+            details=details,
+        )
+
+
+class ArtifactStorageError(AppException, ValueError):
+    """Base exception for artifact persistence failures."""
+
+    def __init__(
+        self,
+        message: str = "Artifact storage operation failed.",
+        code: str = "ARTIFACT_STORAGE_ERROR",
+        status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
+        details: list[dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(status_code=status_code, code=code, message=message, details=details)
+
+
+class ArtifactSecurityError(ArtifactStorageError):
+    """Raised when an unsafe artifact path or traversal attempt is detected."""
+
+    def __init__(self, message: str = "Unsafe path or storage access violation detected.") -> None:
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="ARTIFACT_SECURITY_VIOLATION",
+            message=message,
+        )
+
+
+class ArtifactNotFoundError(ArtifactStorageError):
+    """Raised when an artifact file does not exist on disk."""
+
+    def __init__(self, message: str = "Artifact file was not found or has expired.") -> None:
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="ARTIFACT_NOT_FOUND",
+            message=message,
+        )
+
+
+class ArtifactValidationError(ArtifactStorageError):
+    """Raised when generated PPTX fails package integrity validation."""
+
+    def __init__(self, message: str = "Generated PowerPoint package failed integrity validation.") -> None:
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code="PPTX_VALIDATION_ERROR",
+            message=message,
+        )
+
+
+class JobError(AppException):
+    """Base exception for job lifecycle operations."""
+
+    def __init__(
+        self,
+        message: str = "Job management error.",
+        code: str = "JOB_ERROR",
+        status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
+        details: list[dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(status_code=status_code, code=code, message=message, details=details)
+
+
+class JobNotFoundError(JobError):
+    """Raised when a job ID is not found in the store."""
+
+    def __init__(self, message: str = "Presentation generation job was not found.") -> None:
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="JOB_NOT_FOUND",
+            message=message,
+        )
+
+
+class JobStateError(JobError):
+    """Raised when an invalid state transition is attempted."""
+
+    def __init__(self, message: str = "Invalid job state transition attempted.") -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            code="INVALID_JOB_STATE_TRANSITION",
+            message=message,
+        )
+
+
+class JobTimeoutError(JobError):
+    """Raised when a job exceeds maximum execution runtime."""
+
+    def __init__(self, message: str = "Presentation generation exceeded maximum runtime limit. Please try again.") -> None:
+        super().__init__(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            code="JOB_TIMEOUT",
+            message=message,
+        )
+
+
+class JobConcurrencyError(JobError):
+    """Raised when generation capacity is temporarily exhausted."""
+
+    def __init__(self, message: str = "Too many presentations are being generated right now. Please try again shortly.") -> None:
+        super().__init__(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            code="JOB_CAPACITY_EXCEEDED",
+            message=message,
+        )
+
+
+class ConfigurationError(AppException):
+    """Raised when service configuration or credentials are missing or invalid."""
+
+    def __init__(self, message: str = "Service configuration error.") -> None:
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            code="CONFIGURATION_ERROR",
+            message=message,
+        )
+
+
 def _get_request_id(request: Request) -> str | None:
     """Helper to safely extract request ID from request state."""
     return getattr(request.state, "request_id", None)
-
-
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -160,14 +349,23 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def http_exception_handler(request: Request, exc: StarletteHTTPException | HTTPException) -> JSONResponse:
         req_id = _get_request_id(request)
         code = f"HTTP_{exc.status_code}"
-        logger.warning("HTTPException [%d]: %s", exc.status_code, exc.detail)
+        message = str(exc.detail)
+        details = None
+
+        if isinstance(exc.detail, dict):
+            code = exc.detail.get("code", code)
+            message = exc.detail.get("message", str(exc.detail))
+            details = exc.detail.get("details", None)
+
+        logger.warning("HTTPException [%d]: %s", exc.status_code, message)
         return JSONResponse(
             status_code=exc.status_code,
             content=ErrorResponse(
                 error=ErrorDetail(
                     code=code,
-                    message=str(exc.detail),
+                    message=message,
                     request_id=req_id,
+                    details=details,
                 )
             ).model_dump(),
         )
@@ -186,4 +384,3 @@ def register_exception_handlers(app: FastAPI) -> None:
                 )
             ).model_dump(),
         )
-

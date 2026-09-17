@@ -1,0 +1,50 @@
+# ==============================================================================
+# Root Docker Ignore Rules
+# ==============================================================================
+
+# Version Control & IDE
+.git
+.github
+.gitignore
+.gitattributes
+.vscode
+.idea
+.gemini
+
+# Node / Frontend
+node_modules
+frontend/node_modules
+frontend/dist
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Python / Backend
+.venv
+venv
+backend/.venv
+backend/venv
+__pycache__
+backend/**/__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Root Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# Ephemeral Storage & Test Output
+temp/
+backend/temp/
+*.pptx
+*.log

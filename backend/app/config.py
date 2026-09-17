@@ -32,6 +32,32 @@ class Settings(BaseSettings):
     ai_timeout_seconds: float = 60.0
     ai_max_attempts: int = 2
 
+    # Request Bounds & Slide Limits
+    max_topic_chars: int = 1000
+    max_audience_chars: int = 100
+    max_purpose_chars: int = 100
+    max_style_chars: int = 50
+    min_slides: int = 3
+    max_slides: int = 30
+
+    # Reference PPTX & XML Security Limits
+    max_reference_pptx_bytes: int = 50 * 1024 * 1024  # 50MB
+    max_reference_unpacked_bytes: int = 50 * 1024 * 1024  # 50MB
+    max_reference_files: int = 500
+    max_reference_xml_bytes: int = 10 * 1024 * 1024  # 10MB
+
+    # Concurrency & Job Lifecycle Limits
+    max_job_runtime_seconds: int = 300  # 5 minutes
+    max_concurrent_jobs: int = 5
+
+    # Artifact Storage Configuration
+    artifact_dir: str = "temp/artifacts"
+    artifact_ttl_seconds: int = 3600
+    max_upload_size_bytes: int = 50 * 1024 * 1024  # 50MB max upload
+
+    # Docs / OpenAPI Exposure
+    enable_docs: bool | None = None
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: object) -> list[str]:
@@ -58,8 +84,16 @@ class Settings(BaseSettings):
         """Check if running in test mode."""
         return self.environment == "test"
 
+    @property
+    def show_docs(self) -> bool:
+        """Determine whether API docs should be enabled."""
+        if self.enable_docs is not None:
+            return self.enable_docs
+        return not self.is_production
+
 
 @lru_cache
 def get_settings() -> Settings:
     """Return cached application settings singleton."""
     return Settings()
+

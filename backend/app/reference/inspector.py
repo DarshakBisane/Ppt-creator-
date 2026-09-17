@@ -6,16 +6,12 @@ import zipfile
 import xml.etree.ElementTree as ET
 from typing import BinaryIO
 
+from backend.app.config import get_settings
 from backend.app.reference.exceptions import (
     InvalidReferencePPTXError,
     ReferencePackageTooLargeError,
     ReferenceXMLSecurityError,
 )
-
-# Security Limits
-MAX_ZIP_ENTRIES: int = 500
-MAX_UNCOMPRESSED_TOTAL_BYTES: int = 50 * 1024 * 1024  # 50 MB
-MAX_SINGLE_XML_BYTES: int = 10 * 1024 * 1024  # 10 MB
 
 # XML Entity Defense Pattern
 FORBIDDEN_XML_PATTERNS = [
@@ -25,15 +21,19 @@ FORBIDDEN_XML_PATTERNS = [
     re.compile(rb"PUBLIC\s+[\"']", re.IGNORECASE),
 ]
 
-# Path Traversal Detection
-PATH_TRAVERSAL_REGEX = re.compile(r"(^\.\./|\.\./|/|\\|\.\.\\)")
+# Path Traversal and Dangerous Character Patterns
+UNSAFE_FILENAME_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+WINDOWS_DRIVE_PATTERN = re.compile(r"^[a-zA-Z]:")
 
 
 def safe_parse_xml(xml_bytes: bytes, part_name: str = "XML part") -> ET.Element:
     """Safely parse XML bytes enforcing entity and size restrictions."""
-    if len(xml_bytes) > MAX_SINGLE_XML_BYTES:
+    settings = get_settings()
+    max_xml_bytes = settings.max_reference_xml_bytes
+
+    if len(xml_bytes) > max_xml_bytes:
         raise ReferencePackageTooLargeError(
-            f"XML part '{part_name}' exceeds size limit ({len(xml_bytes)} > {MAX_SINGLE_XML_BYTES} bytes)."
+            f"XML part '{part_name}' exceeds size limit ({len(xml_bytes)} > {max_xml_bytes} bytes)."
         )
 
     for pattern in FORBIDDEN_XML_PATTERNS:
@@ -71,24 +71,55 @@ class SafePPTXPackage:
             raise InvalidReferencePPTXError(f"Cannot open presentation package: {str(exc)}") from exc
 
     def _validate_archive_security(self) -> None:
+        settings = get_settings()
+        max_entries = settings.max_reference_files
+        max_uncompressed_bytes = settings.max_reference_unpacked_bytes
+        max_single_entry = max_uncompressed_bytes // 2  # e.g., 25MB single file max
+
         infolist = self._raw_zip.infolist()
 
-        if len(infolist) > MAX_ZIP_ENTRIES:
+        if len(infolist) > max_entries:
             raise ReferencePackageTooLargeError(
-                f"Presentation contains too many files ({len(infolist)} > {MAX_ZIP_ENTRIES})."
+                f"Presentation contains too many files ({len(infolist)} > {max_entries})."
             )
 
-        total_uncompressed = sum(info.file_size for info in infolist)
-        if total_uncompressed > MAX_UNCOMPRESSED_TOTAL_BYTES:
-            raise ReferencePackageTooLargeError(
-                f"Uncompressed presentation size exceeds limit ({total_uncompressed} > {MAX_UNCOMPRESSED_TOTAL_BYTES} bytes)."
-            )
-
-        # Path traversal checks
+        total_uncompressed = 0
         for info in infolist:
             name = info.filename
-            if name.startswith("/") or name.startswith("\\") or ".." in name:
+
+            # Check dangerous characters and traversal
+            if (
+                "\x00" in name
+                or UNSAFE_FILENAME_CHARS.search(name)
+                or name.startswith("/")
+                or name.startswith("\\")
+                or WINDOWS_DRIVE_PATTERN.match(name)
+                or ".." in name.replace("\\", "/").split("/")
+                or "/../" in name
+                or "\\..\\" in name
+            ):
                 raise ReferenceXMLSecurityError(f"Suspicious path in PPTX package: {name}")
+
+            # Check individual uncompressed file size
+            if info.file_size > max_single_entry:
+                raise ReferencePackageTooLargeError(
+                    f"File '{name}' inside package exceeds single-file size limit ({info.file_size} > {max_single_entry} bytes)."
+                )
+
+            # Layered ZIP bomb ratio check: only flag if large payload AND extreme compression ratio (> 100x)
+            if info.file_size > 1024 * 1024 and info.compress_size > 0:
+                ratio = info.file_size / info.compress_size
+                if ratio > 100:
+                    raise ReferencePackageTooLargeError(
+                        f"Suspicious compression ratio detected for entry '{name}' ({ratio:.1f}:1)."
+                    )
+
+            total_uncompressed += info.file_size
+
+        if total_uncompressed > max_uncompressed_bytes:
+            raise ReferencePackageTooLargeError(
+                f"Uncompressed presentation size exceeds limit ({total_uncompressed} > {max_uncompressed_bytes} bytes)."
+            )
 
     def _validate_pptx_structure(self) -> None:
         if "[Content_Types].xml" not in self._namelist:
@@ -131,3 +162,4 @@ class SafePPTXPackage:
 
     def close(self) -> None:
         self._raw_zip.close()
+

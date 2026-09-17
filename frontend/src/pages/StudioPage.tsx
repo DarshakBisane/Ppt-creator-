@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Sparkles, RotateCcw, Info, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sparkles, RotateCcw, Info, Loader2 } from 'lucide-react';
 import { ModeSelector } from '@/components/studio/ModeSelector';
 import { TopicForm } from '@/components/studio/TopicForm';
 import { ReferenceUploader } from '@/components/studio/ReferenceUploader';
@@ -15,11 +15,15 @@ import {
   PurposeOption,
   SlideCountOption,
   StyleOption,
+  JobStatusResponse,
 } from '@/types';
+import { createGenerationJob, getJobStatus, getDownloadUrl } from '@/lib/api';
 
 interface StudioPageProps {
   initialMode?: CreationMode;
 }
+
+const STORAGE_KEY = 'active_presentation_job_id';
 
 export const StudioPage: React.FC<StudioPageProps> = ({ initialMode = 'topic' }) => {
   const [formState, setFormState] = useState<PresentationFormState>({
@@ -35,13 +39,94 @@ export const StudioPage: React.FC<StudioPageProps> = ({ initialMode = 'topic' })
   });
 
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [generationNotice, setGenerationNotice] = useState<string | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [activeBottomTab, setActiveBottomTab] = useState<'preview' | 'pipeline' | 'diagnostics'>('preview');
+
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<JobStatusResponse | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  const pollTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const consecutiveErrorsRef = React.useRef<number>(0);
+
+  const isJobActive = jobStatus
+    ? !['completed', 'failed'].includes(jobStatus.state)
+    : isSubmitting;
+
+  const stopPolling = () => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
+
+  // Restore active job from localStorage on initial mount
+  useEffect(() => {
+    const storedJobId = localStorage.getItem(STORAGE_KEY);
+    if (storedJobId) {
+      setActiveJobId(storedJobId);
+      getJobStatus(storedJobId)
+        .then((status) => {
+          setJobStatus(status);
+          if (status.state === 'completed') {
+            setActiveBottomTab('preview');
+          } else if (status.state === 'failed') {
+            setGenerationError(status.error?.message || 'Previous generation failed.');
+            localStorage.removeItem(STORAGE_KEY);
+          } else {
+            setActiveBottomTab('pipeline');
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem(STORAGE_KEY);
+          setActiveJobId(null);
+        });
+    }
+
+    return () => stopPolling();
+  }, []);
+
+  // Poll backend status while job is running with bounded retry backoff
+  useEffect(() => {
+    stopPolling();
+    consecutiveErrorsRef.current = 0;
+
+    if (!activeJobId) return;
+
+    const isTerminal = jobStatus?.state === 'completed' || jobStatus?.state === 'failed';
+    if (isTerminal) return;
+
+    pollTimerRef.current = setInterval(async () => {
+      try {
+        const status = await getJobStatus(activeJobId);
+        consecutiveErrorsRef.current = 0;
+        setJobStatus(status);
+
+        if (status.state === 'completed') {
+          stopPolling();
+          setActiveBottomTab('preview');
+        } else if (status.state === 'failed') {
+          stopPolling();
+          setGenerationError(status.error?.message || 'Presentation generation failed.');
+        }
+      } catch (err: any) {
+        consecutiveErrorsRef.current += 1;
+        // Allow up to 3 consecutive transient polling failures before giving up
+        if (consecutiveErrorsRef.current >= 3 || err.status === 404) {
+          stopPolling();
+          setGenerationError(err.message || 'Lost connection to presentation generation job. Please check status or try again.');
+        }
+      }
+    }, 1000);
+
+    return () => stopPolling();
+  }, [activeJobId, jobStatus?.state]);
+
 
   const handleModeChange = (mode: CreationMode) => {
     setFormState((prev) => ({ ...prev, mode }));
     setValidationError(null);
-    setGenerationNotice(null);
+    setGenerationError(null);
   };
 
   const handleTopicChange = (topic: string) => {
@@ -72,13 +157,16 @@ export const StudioPage: React.FC<StudioPageProps> = ({ initialMode = 'topic' })
       style: 'professional',
     });
     setValidationError(null);
-    setGenerationNotice(null);
+    setGenerationError(null);
+    setActiveJobId(null);
+    setJobStatus(null);
+    localStorage.removeItem(STORAGE_KEY);
   };
 
-  const handleGenerateClick = (e: React.FormEvent) => {
+  const handleGenerateClick = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
-    setGenerationNotice(null);
+    setGenerationError(null);
 
     // 1. Validation check
     if (!formState.topic.trim()) {
@@ -91,12 +179,40 @@ export const StudioPage: React.FC<StudioPageProps> = ({ initialMode = 'topic' })
       return;
     }
 
-    // 2. Verified form state notification (no fake completion)
-    setGenerationNotice(
-      `Form inputs validated successfully for ${
-        formState.mode === 'topic' ? 'Topic Creation' : 'Reference Style Transfer'
-      }. The AI Orchestrator and Deterministic PPTX rendering backend will be wired in subsequent phases.`
-    );
+    // 2. Prevent duplicate submission
+    if (isJobActive || isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await createGenerationJob(formState);
+      setActiveJobId(res.job_id);
+      localStorage.setItem(STORAGE_KEY, res.job_id);
+      setJobStatus({
+        job_id: res.job_id,
+        state: 'queued',
+        progress: 0,
+        stage: 'planning_slides',
+        message: 'Job queued...',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        artifact: null,
+        error: null,
+      });
+      setActiveBottomTab('pipeline');
+    } catch (err: any) {
+      setGenerationError(err.message || 'Failed to submit presentation generation request.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRetry = () => {
+    if (!isJobActive && !isSubmitting) {
+      const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+      handleGenerateClick(fakeEvent);
+    }
   };
 
   return (
@@ -124,18 +240,16 @@ export const StudioPage: React.FC<StudioPageProps> = ({ initialMode = 'topic' })
         />
       )}
 
-      {/* Pipeline Status Notice */}
-      {generationNotice && (
-        <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 flex items-start space-x-3 text-sm animate-in fade-in duration-200">
-          <CheckCircle2 className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h5 className="font-semibold text-indigo-200">Inputs Validated</h5>
-            <p className="text-xs sm:text-sm text-indigo-300/90 mt-0.5 leading-relaxed">
-              {generationNotice}
-            </p>
-          </div>
-        </div>
+      {generationError && (
+        <ErrorAlert
+          title="Generation Error"
+          message={generationError}
+          actionLabel="Retry Generation"
+          onAction={handleRetry}
+          onDismiss={() => setGenerationError(null)}
+        />
       )}
+
 
       {/* Main Two-Column Workspace */}
       <form onSubmit={handleGenerateClick} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -189,16 +303,35 @@ export const StudioPage: React.FC<StudioPageProps> = ({ initialMode = 'topic' })
             <div className="pt-4 border-t border-slate-800/80 flex items-center gap-3">
               <button
                 type="submit"
-                className="flex-1 py-3.5 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-all shadow-xl shadow-indigo-600/25 flex items-center justify-center space-x-2 cursor-pointer"
+                disabled={isJobActive || isSubmitting}
+                className={`flex-1 py-3.5 px-6 rounded-xl text-sm font-semibold transition-all shadow-xl flex items-center justify-center space-x-2 ${
+                  isJobActive || isSubmitting
+                    ? 'bg-indigo-900/50 text-indigo-300 border border-indigo-500/30 cursor-not-allowed opacity-80'
+                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/25 cursor-pointer'
+                }`}
               >
-                <Sparkles className="w-4 h-4" />
-                <span>Generate Presentation</span>
+                {isJobActive || isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-300" />
+                    <span>Generating Presentation...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Generate Presentation</span>
+                  </>
+                )}
               </button>
 
               <button
                 type="button"
                 onClick={handleReset}
-                className="p-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                disabled={isJobActive}
+                className={`p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 transition-colors ${
+                  isJobActive
+                    ? 'cursor-not-allowed opacity-50'
+                    : 'hover:bg-slate-800 hover:text-white cursor-pointer'
+                }`}
                 title="Reset Form"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -207,7 +340,7 @@ export const StudioPage: React.FC<StudioPageProps> = ({ initialMode = 'topic' })
 
             <div className="flex items-center space-x-2 text-[11px] text-slate-500">
               <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span>Native PowerPoint (.pptx) output • No token limits</span>
+              <span>Native PowerPoint (.pptx) output • Deterministic layout</span>
             </div>
           </div>
         </div>
@@ -248,10 +381,29 @@ export const StudioPage: React.FC<StudioPageProps> = ({ initialMode = 'topic' })
           </button>
         </div>
 
-        {activeBottomTab === 'preview' && <SlideGalleryShell hasResult={false} />}
-        {activeBottomTab === 'pipeline' && <GenerationProgressShell />}
-        {activeBottomTab === 'diagnostics' && <DiagnosticsInspectorShell hasDiagnostics={false} />}
+        {activeBottomTab === 'preview' && (
+          <SlideGalleryShell
+            hasResult={jobStatus?.state === 'completed' && !!jobStatus.artifact}
+            downloadUrl={jobStatus?.job_id ? getDownloadUrl(jobStatus.job_id) : null}
+            filename={jobStatus?.artifact?.filename || 'Presentation.pptx'}
+            slideCount={0}
+          />
+        )}
+        {activeBottomTab === 'pipeline' && (
+          <GenerationProgressShell
+            currentStageId={jobStatus?.stage || 'idle'}
+            progressPercent={jobStatus?.progress || 0}
+            message={jobStatus?.message || 'Ready to generate presentation'}
+            isGenerating={isJobActive}
+            isCompleted={jobStatus?.state === 'completed'}
+            isFailed={jobStatus?.state === 'failed'}
+          />
+        )}
+        {activeBottomTab === 'diagnostics' && (
+          <DiagnosticsInspectorShell hasDiagnostics={jobStatus?.state === 'completed'} />
+        )}
       </div>
     </div>
   );
 };
+

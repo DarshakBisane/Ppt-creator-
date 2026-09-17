@@ -1,0 +1,43 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: presenai-backend
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      - APP_NAME=AI Presentation Generator
+      - ENVIRONMENT=production
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:80,http://127.0.0.1:3000,http://127.0.0.1:5173
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - AI_TIMEOUT_SECONDS=${AI_TIMEOUT_SECONDS:-60.0}
+      - AI_MAX_ATTEMPTS=${AI_MAX_ATTEMPTS:-2}
+      - ARTIFACT_DIR=/app/temp/artifacts
+      - ARTIFACT_TTL_SECONDS=${ARTIFACT_TTL_SECONDS:-3600}
+      - MAX_CONCURRENT_JOBS=${MAX_CONCURRENT_JOBS:-5}
+      - MAX_JOB_RUNTIME_SECONDS=${MAX_JOB_RUNTIME_SECONDS:-300}
+      - ENABLE_DOCS=${ENABLE_DOCS:-false}
+    volumes:
+      - artifacts_data:/app/temp/artifacts
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=http://localhost:${API_PORT:-8000}
+    container_name: presenai-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  artifacts_data:

@@ -68,11 +68,12 @@ export const PresentationSettings: React.FC<PresentationSettingsProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Audience Selector */}
         <div className="space-y-2">
-          <label className="flex items-center space-x-1.5 text-xs font-semibold text-slate-300">
+          <label htmlFor="audience-select" className="flex items-center space-x-1.5 text-xs font-semibold text-slate-300">
             <Users className="w-3.5 h-3.5 text-indigo-400" />
             <span>Target Audience</span>
           </label>
           <select
+            id="audience-select"
             value={audience}
             onChange={(e) => onAudienceChange(e.target.value as AudienceOption)}
             className="w-full rounded-xl bg-slate-900 border border-slate-800 px-3.5 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
@@ -87,11 +88,12 @@ export const PresentationSettings: React.FC<PresentationSettingsProps> = ({
 
         {/* Purpose Selector */}
         <div className="space-y-2">
-          <label className="flex items-center space-x-1.5 text-xs font-semibold text-slate-300">
+          <label htmlFor="purpose-select" className="flex items-center space-x-1.5 text-xs font-semibold text-slate-300">
             <Target className="w-3.5 h-3.5 text-violet-400" />
             <span>Presentation Purpose</span>
           </label>
           <select
+            id="purpose-select"
             value={purpose}
             onChange={(e) => onPurposeChange(e.target.value as PurposeOption)}
             className="w-full rounded-xl bg-slate-900 border border-slate-800 px-3.5 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
@@ -111,11 +113,12 @@ export const PresentationSettings: React.FC<PresentationSettingsProps> = ({
           <Layers className="w-3.5 h-3.5 text-cyan-400" />
           <span>Deck Length</span>
         </label>
-        <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
+        <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5" role="group" aria-label="Deck Length">
           {slideCounts.map((item) => (
             <button
               key={item.value}
               type="button"
+              aria-pressed={slideCount === item.value}
               onClick={() => onSlideCountChange(item.value)}
               className={`py-2 px-2 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer ${
                 slideCount === item.value
@@ -135,10 +138,19 @@ export const PresentationSettings: React.FC<PresentationSettingsProps> = ({
           <Palette className="w-3.5 h-3.5 text-emerald-400" />
           <span>Design Aesthetic</span>
         </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Design Aesthetic">
           {styles.map((item) => (
             <div
               key={item.value}
+              role="radio"
+              aria-checked={style === item.value}
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onStyleChange(item.value);
+                }
+              }}
               onClick={() => onStyleChange(item.value)}
               className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
                 style === item.value

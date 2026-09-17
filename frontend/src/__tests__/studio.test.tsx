@@ -100,7 +100,7 @@ describe('Presentation Studio & UI Navigation Tests', () => {
     expect(screen.getByText(/File size exceeds the 25 MB limit/i)).toBeInTheDocument();
   });
 
-  it('validates form successfully without executing fake generation', () => {
+  it('submits form successfully and transitions to pipeline tab', () => {
     render(<StudioPage initialMode="topic" />);
     const textarea = screen.getByPlaceholderText(/Describe your presentation topic/i);
     fireEvent.change(textarea, { target: { value: 'Autonomous Systems Architecture' } });
@@ -108,8 +108,7 @@ describe('Presentation Studio & UI Navigation Tests', () => {
     const generateBtn = screen.getByRole('button', { name: /Generate Presentation/i });
     fireEvent.click(generateBtn);
 
-    expect(screen.getByRole('heading', { level: 5, name: /Inputs Validated/i })).toBeInTheDocument();
-    expect(screen.getByText(/The AI Orchestrator and Deterministic PPTX rendering backend will be wired in subsequent phases/i)).toBeInTheDocument();
+    expect(screen.getByText(/Generation Pipeline/i)).toBeInTheDocument();
   });
 
   it('resets form state when clicking reset button', () => {

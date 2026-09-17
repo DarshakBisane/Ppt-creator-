@@ -62,4 +62,22 @@ class PresentationGenerationRequest(BaseModel):
         clean = v.strip()
         if not clean:
             raise ValueError("Presentation topic cannot be empty or whitespace only.")
+        if len(clean) > MAX_PRESENTATION_TOPIC_LENGTH:
+            raise ValueError(f"Presentation topic exceeds maximum length ({len(clean)} > {MAX_PRESENTATION_TOPIC_LENGTH}).")
         return clean
+
+    @field_validator("audience", "purpose", "style")
+    @classmethod
+    def sanitize_optional_text(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        clean = v.strip()
+        return clean if clean else None
+
+    @field_validator("slide_count")
+    @classmethod
+    def validate_slide_count_bounds(cls, v: int) -> int:
+        if v < 3 or v > 30:
+            raise ValueError(f"Slide count must be between 3 and 30 slides (got {v}).")
+        return v
+

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app import __version__
+from backend.app.api.generate import router as generate_router
 from backend.app.api.health import router as health_router
 from backend.app.config import Settings, get_settings
 from backend.app.core.errors import register_exception_handlers
@@ -36,8 +37,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=settings.app_name,
         version=__version__,
         description="Production AI Presentation Generator API",
-        docs_url="/docs" if not settings.is_production else None,
-        redoc_url="/redoc" if not settings.is_production else None,
+        docs_url="/docs" if settings.show_docs else None,
+        redoc_url="/redoc" if settings.show_docs else None,
+        openapi_url="/openapi.json" if settings.show_docs else None,
         lifespan=lifespan,
     )
 
@@ -61,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # 4. Register Routers
     app.include_router(health_router)
+    app.include_router(generate_router)
 
     return app
 
