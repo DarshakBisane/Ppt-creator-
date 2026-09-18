@@ -34,6 +34,37 @@ class SemanticVisualSelector:
         deck_budget: DeckVisualBudget | None = None,
     ) -> SemanticVisualDecision:
         """Analyze slide content and select the most appropriate visual archetype."""
+        # 0. Check if slide has an explicit specialized diagram visual type already set
+        explicit_vtype = slide.visual_plan.visual_type if slide.visual_plan else None
+        specialized_diagram_types = {
+            VisualType.ANATOMY,
+            VisualType.LIFECYCLE,
+            VisualType.DECISION_FLOW,
+            VisualType.LAYERED_STACK,
+            VisualType.ARCHITECTURE,
+            VisualType.ROADMAP,
+            VisualType.TABLE,
+            VisualType.COMPARISON,
+            VisualType.TIMELINE,
+            VisualType.PROCESS_FLOW,
+            VisualType.KPI,
+        }
+
+        if explicit_vtype in specialized_diagram_types:
+            descriptor = get_archetype_descriptor(explicit_vtype)
+            if deck_budget:
+                deck_budget.record_selection(explicit_vtype, descriptor.preferred_archetype)
+            return SemanticVisualDecision(
+                selected_visual_type=explicit_vtype,
+                selected_archetype=descriptor.preferred_archetype,
+                rationale=f"Preserved specialized visual blueprint model: {explicit_vtype.value}",
+                confidence=0.95,
+                requires_quantitative_data=descriptor.requires_quantitative_data,
+                fallback_visual_type=descriptor.fallback_visual_type,
+                fallback_archetype=descriptor.fallback_archetype,
+                candidate_rankings=[],
+            )
+
         # 1. Semantic Signal Extraction
         signal = self.classifier.classify_slide(slide)
 
@@ -60,7 +91,6 @@ class SemanticVisualSelector:
         if vtype == VisualType.TIMELINE:
             timeline_data = self.data_builder.build_timeline_data(slide)
             if not timeline_data:
-                # Fallback to Process Flow or Card Grid
                 selected_vtype = fallback_vtype
                 selected_archetype = fallback_archetype
                 rationale += f" [Data check failed -> fallback to {fallback_vtype.value}]"

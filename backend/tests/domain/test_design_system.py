@@ -54,8 +54,8 @@ def test_design_system_defaults() -> None:
     ds = DesignSystem()
     assert ds.canvas.width == 1920
     assert ds.canvas.height == 1080
-    assert ds.palette.primary.value == "#6366F1"
-    assert ds.typography.title.font_size == 36
+    assert ds.palette.primary.value == "#0F766E"
+    assert ds.typography.title.font_size == 32
     assert ds.geometry.corner_radius == 12
     assert ds.spacing.md == 24
     assert ds.layout_preferences.density == Density.MEDIUM

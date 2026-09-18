@@ -23,11 +23,15 @@ from backend.app.domain.design_system import (
 from backend.app.domain.elements import Element
 from backend.app.domain.enums import (
     Alignment,
+    ContentDepth,
+    ContentIssueType,
+    ContentSeverity,
     DataSource,
     Density,
     ElementType,
     JobStatus,
     NarrativeRole,
+    NarrativeStrategy,
     ProcessDirection,
     TimelineStatus,
     TokenSource,
@@ -36,6 +40,7 @@ from backend.app.domain.enums import (
 )
 from backend.app.domain.jobs import JobError, JobProgress, JobState
 from backend.app.domain.presentation import (
+    GenerationMetadata,
     Presentation,
     PresentationMetadata,
     Slide,
@@ -54,11 +59,15 @@ __all__ = [
     "CURRENT_SCHEMA_VERSION",
     # Enums
     "Alignment",
+    "ContentDepth",
+    "ContentIssueType",
+    "ContentSeverity",
     "DataSource",
     "Density",
     "ElementType",
     "JobStatus",
     "NarrativeRole",
+    "NarrativeStrategy",
     "ProcessDirection",
     "TimelineStatus",
     "TokenSource",

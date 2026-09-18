@@ -15,7 +15,7 @@ from backend.app.domain.constants import (
 )
 from backend.app.domain.design_system import DesignSystem
 from backend.app.domain.elements import Element
-from backend.app.domain.enums import NarrativeRole
+from backend.app.domain.enums import ContentDepth, NarrativeRole, NarrativeStrategy
 from backend.app.domain.visuals import VisualPlan
 
 
@@ -31,6 +31,9 @@ class Slide(BaseModel):
         description="Slide purpose in the presentation narrative flow",
     )
     purpose: str | None = Field(default=None, max_length=300)
+    objective: str | None = Field(default=None, max_length=300, description="Why this slide exists")
+    key_message: str | None = Field(default=None, max_length=500, description="Core message/thesis of the slide")
+    takeaway: str | None = Field(default=None, max_length=500, description="Explicit actionable takeaway or insight")
     visual_plan: VisualPlan = Field(
         default_factory=VisualPlan,
         description="Semantic visual plan for deterministic layout selection",
@@ -64,8 +67,25 @@ class PresentationMetadata(BaseModel):
     subtitle: str | None = Field(default=None, max_length=MAX_SLIDE_SUBTITLE_LENGTH)
     audience: str | None = Field(default=None, max_length=100)
     purpose: str | None = Field(default=None, max_length=100)
+    narrative_strategy: NarrativeStrategy = Field(
+        default=NarrativeStrategy.BUSINESS_EXECUTIVE,
+        description="Storytelling framework selected for presentation structure",
+    )
+    content_depth: ContentDepth = Field(
+        default=ContentDepth.PROFESSIONAL,
+        description="Depth level of generated analytical and factual content",
+    )
     language: str = Field(default="en", max_length=10)
     slide_count: int = Field(..., ge=MIN_SLIDES_COUNT, le=MAX_SLIDES_COUNT)
+
+
+
+class GenerationMetadata(BaseModel):
+    """Provenance and generation telemetry metadata."""
+
+    provider: str | None = None
+    mode: str | None = None
+    model: str | None = None
 
 
 class Presentation(BaseModel):
@@ -78,7 +98,7 @@ class Presentation(BaseModel):
     metadata: PresentationMetadata
     design_system: DesignSystem = Field(default_factory=DesignSystem)
     slides: list[Slide] = Field(..., min_length=MIN_SLIDES_COUNT, max_length=MAX_SLIDES_COUNT)
-    generation_metadata: dict[str, str] | None = None
+    generation_metadata: GenerationMetadata | None = None
 
     @model_validator(mode="after")
     def validate_presentation_integrity(self) -> "Presentation":

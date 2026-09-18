@@ -41,30 +41,32 @@ class ColorToken(BaseModel):
 
 
 class Palette(BaseModel):
-    """Semantic color palette."""
+    """Semantic color palette with light-theme defaults."""
 
     background: ColorToken = Field(
-        default_factory=lambda: ColorToken(value="#030712", source=TokenSource.DEFAULT)
-    )
-    surface: ColorToken = Field(
-        default_factory=lambda: ColorToken(value="#0F172A", source=TokenSource.DEFAULT)
-    )
-    primary: ColorToken = Field(
-        default_factory=lambda: ColorToken(value="#6366F1", source=TokenSource.DEFAULT)
-    )
-    secondary: ColorToken = Field(
-        default_factory=lambda: ColorToken(value="#8B5CF6", source=TokenSource.DEFAULT)
-    )
-    accent: ColorToken = Field(
-        default_factory=lambda: ColorToken(value="#06B6D4", source=TokenSource.DEFAULT)
-    )
-    text_primary: ColorToken = Field(
         default_factory=lambda: ColorToken(value="#F8FAFC", source=TokenSource.DEFAULT)
     )
-    text_secondary: ColorToken = Field(
-        default_factory=lambda: ColorToken(value="#94A3B8", source=TokenSource.DEFAULT)
+    surface: ColorToken = Field(
+        default_factory=lambda: ColorToken(value="#FFFFFF", source=TokenSource.DEFAULT)
     )
-    border: ColorToken | None = None
+    primary: ColorToken = Field(
+        default_factory=lambda: ColorToken(value="#0F766E", source=TokenSource.DEFAULT)
+    )
+    secondary: ColorToken = Field(
+        default_factory=lambda: ColorToken(value="#1E293B", source=TokenSource.DEFAULT)
+    )
+    accent: ColorToken = Field(
+        default_factory=lambda: ColorToken(value="#0284C7", source=TokenSource.DEFAULT)
+    )
+    text_primary: ColorToken = Field(
+        default_factory=lambda: ColorToken(value="#0F172A", source=TokenSource.DEFAULT)
+    )
+    text_secondary: ColorToken = Field(
+        default_factory=lambda: ColorToken(value="#475569", source=TokenSource.DEFAULT)
+    )
+    border: ColorToken = Field(
+        default_factory=lambda: ColorToken(value="#E2E8F0", source=TokenSource.DEFAULT)
+    )
     success: ColorToken | None = None
     warning: ColorToken | None = None
     danger: ColorToken | None = None
@@ -73,8 +75,8 @@ class Palette(BaseModel):
 class TypographyStyle(BaseModel):
     """Typography style specification."""
 
-    font_family: str = Field(default="Inter", description="Font family name")
-    font_size: int = Field(..., gt=0, description="Font size in points")
+    font_family: str = Field(default="Aptos", description="Font family name (e.g. Aptos, Arial, Times New Roman)")
+    font_size: int = Field(..., ge=1, description="Font size in points")
     font_weight: Literal["normal", "medium", "semibold", "bold", "extrabold"] = Field(
         default="normal"
     )
@@ -86,22 +88,22 @@ class TypographySystem(BaseModel):
     """Complete typography hierarchy."""
 
     display: TypographyStyle = Field(
-        default_factory=lambda: TypographyStyle(font_family="Outfit", font_size=44, font_weight="extrabold")
+        default_factory=lambda: TypographyStyle(font_family="Aptos", font_size=40, font_weight="bold")
     )
     title: TypographyStyle = Field(
-        default_factory=lambda: TypographyStyle(font_family="Outfit", font_size=36, font_weight="bold")
+        default_factory=lambda: TypographyStyle(font_family="Aptos", font_size=32, font_weight="bold")
     )
     heading: TypographyStyle = Field(
-        default_factory=lambda: TypographyStyle(font_family="Outfit", font_size=24, font_weight="semibold")
+        default_factory=lambda: TypographyStyle(font_family="Aptos", font_size=22, font_weight="semibold")
     )
     body: TypographyStyle = Field(
-        default_factory=lambda: TypographyStyle(font_family="Inter", font_size=16, font_weight="normal")
+        default_factory=lambda: TypographyStyle(font_family="Aptos", font_size=16, font_weight="normal")
     )
     caption: TypographyStyle = Field(
-        default_factory=lambda: TypographyStyle(font_family="Inter", font_size=12, font_weight="normal")
+        default_factory=lambda: TypographyStyle(font_family="Aptos", font_size=12, font_weight="normal")
     )
     label: TypographyStyle = Field(
-        default_factory=lambda: TypographyStyle(font_family="Inter", font_size=14, font_weight="medium")
+        default_factory=lambda: TypographyStyle(font_family="Aptos", font_size=14, font_weight="medium")
     )
 
 

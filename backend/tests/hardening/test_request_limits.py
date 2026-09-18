@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from backend.app.ai.context import PresentationGenerationRequest
+from backend.app.domain.constants import MAX_PRESENTATION_TOPIC_LENGTH
 from backend.app.main import create_app
 
 
@@ -16,7 +17,7 @@ def client():
 
 def test_oversized_topic_rejected():
     """Topic exceeding MAX_PRESENTATION_TOPIC_LENGTH is rejected."""
-    long_topic = "A" * 1001
+    long_topic = "A" * (MAX_PRESENTATION_TOPIC_LENGTH + 1)
     with pytest.raises(ValidationError):
         PresentationGenerationRequest(topic=long_topic, slide_count=5)
 

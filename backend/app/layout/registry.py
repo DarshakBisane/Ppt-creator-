@@ -2,16 +2,20 @@
 
 from backend.app.domain.enums import VisualType
 from backend.app.layout.archetypes import (
+    AnatomyResolver,
     ArchitectureResolver,
     BaseArchetypeResolver,
     BlankResolver,
     ChartInsightResolver,
     ComparisonResolver,
+    DecisionFlowResolver,
     FlowchartResolver,
     FourCardGridResolver,
     HeroResolver,
     HierarchyTreeResolver,
     KPIDashboardResolver,
+    LayeredStackResolver,
+    LifecycleResolver,
     MatrixResolver,
     ProcessFlowResolver,
     QuoteResolver,
@@ -61,7 +65,12 @@ class LayoutRegistry:
         self.register(VisualType.DONUT_CHART.value, ChartInsightResolver())
         self.register(VisualType.QUOTE.value, QuoteResolver())
         self.register(VisualType.ROADMAP.value, RoadmapResolver())
-        self.register(VisualType.CYCLE.value, RoadmapResolver())
+        self.register(VisualType.CYCLE.value, LifecycleResolver())
+        # Specialized diagram compositions
+        self.register(VisualType.ANATOMY.value, AnatomyResolver())
+        self.register(VisualType.LIFECYCLE.value, LifecycleResolver())
+        self.register(VisualType.DECISION_FLOW.value, DecisionFlowResolver())
+        self.register(VisualType.LAYERED_STACK.value, LayeredStackResolver())
 
     def register(self, key: str, resolver: BaseArchetypeResolver) -> None:
         """Register a resolver for a visual archetype key."""

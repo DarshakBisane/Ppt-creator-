@@ -66,7 +66,7 @@ Production-grade web application platform that generates editable, professionall
 
 | Variable | Required | Default | Purpose | Example / Format |
 | :--- | :---: | :--- | :--- | :--- |
-| `GEMINI_API_KEY` | **Yes** (Prod) | *None* | Google Gemini AI Studio API key | `AQ.Ab8RN6...` |
+| `GEMINI_API_KEY` | **Yes** (Prod) | *None* | Google Gemini AI Studio API key | `AIzaSy...` |
 | `ENVIRONMENT` | No | `development` | Runtime environment (`development`, `test`, `production`) | `production` |
 | `APP_NAME` | No | `"AI Presentation Generator"` | Application display name | `"PresenAI"` |
 | `API_HOST` | No | `127.0.0.1` | Network interface for FastAPI to bind | `0.0.0.0` |

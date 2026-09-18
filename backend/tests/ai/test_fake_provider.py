@@ -68,11 +68,11 @@ async def test_fake_provider_visual_diversity():
     presentation = await provider.generate_presentation(req)
 
     visual_types = [slide.visual_plan.visual_type for slide in presentation.slides]
-    # Ensure visual variety across slides
-    assert VisualType.PROCESS_FLOW in visual_types
-    assert VisualType.KPI in visual_types
-    assert VisualType.TIMELINE in visual_types
-    assert VisualType.CARD_GRID in visual_types
+    # Ensure visual variety across slides includes modern archetypes and low card dominance
+    assert VisualType.ANATOMY in visual_types or VisualType.PROCESS_FLOW in visual_types
+    assert VisualType.LIFECYCLE in visual_types or VisualType.TIMELINE in visual_types
+    assert VisualType.LAYERED_STACK in visual_types or VisualType.ARCHITECTURE in visual_types
+    assert len(set(visual_types)) >= 4
 
 
 @pytest.mark.asyncio

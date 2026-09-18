@@ -1197,3 +1197,423 @@ class RoadmapResolver(BaseArchetypeResolver):
             )
 
         return elements, [], warnings
+
+
+# ---------------------------------------------------------------------------
+# 19. Anatomy Diagram Layout
+# ---------------------------------------------------------------------------
+class AnatomyResolver(BaseArchetypeResolver):
+    """Central structural object with labeled callout components and connector lines."""
+
+    def resolve(
+        self,
+        slide: Slide,
+        content_rect: Rect,
+        ctx: SpacingContext,
+    ) -> tuple[list[ElementGeometry], list[ConnectorGeometry], list[LayoutWarning]]:
+        elements: list[ElementGeometry] = []
+        connectors: list[ConnectorGeometry] = []
+        warnings: list[LayoutWarning] = []
+
+        # Center core block width & height
+        center_w = round(content_rect.width * 0.36)
+        center_h = round(content_rect.height * 0.70)
+        center_x = content_rect.x + (content_rect.width - center_w) // 2
+        center_y = content_rect.y + (content_rect.height - center_h) // 2
+
+        center_rect = Rect(x=center_x, y=center_y, width=center_w, height=center_h)
+        center_id = f"{slide.id}_anatomy_core"
+        center_ports = generate_ports(center_id, center_rect)
+
+        core_title = slide.title.split(":")[0][:40]
+        elements.append(
+            ElementGeometry(
+                id=center_id,
+                semantic_type=ElementType.CARD,
+                rect=center_rect,
+                alignment=Alignment.CENTER,
+                ports=center_ports,
+                role="anatomy_core",
+                importance="primary",
+                style_hints={"variant": "hero_banner", "accent_border": True},
+                content_data={
+                    "title": f"🏛️  {core_title}",
+                    "body": slide.purpose or "Core structural specification, cryptographic parameters, and signed metadata.",
+                },
+            )
+        )
+
+        # Callout items (left and right columns)
+        callout_items = [
+            (elem.card_content.title if elem.card_content else f"Component {i+1}",
+             elem.card_content.body if elem.card_content else "")
+            for i, elem in enumerate(slide.elements)
+        ]
+        if not callout_items:
+            callout_items = [
+                ("Version & Serial Number", "Unique identification number assigned by the issuing Certificate Authority."),
+                ("Subject & Issuer Identity", "Distinguished Names (DN) establishing cryptographic entity bindings."),
+                ("Public Key & Algorithm", "Cryptographic key material (RSA 4096 / ECC P-384) and OID parameters."),
+                ("Digital Signature & Validity", "Cryptographic proof of authenticity verified by the root trust anchor."),
+            ]
+
+        left_items = callout_items[:(len(callout_items) + 1) // 2]
+        right_items = callout_items[(len(callout_items) + 1) // 2:]
+
+        callout_w = (center_x - content_rect.x) - ctx.column_gap
+
+        # Left Column Callouts
+        if left_items:
+            left_h = (content_rect.height - (ctx.row_gap * (len(left_items) - 1))) // len(left_items)
+            for i, (c_title, c_desc) in enumerate(left_items):
+                c_rect = Rect(
+                    x=content_rect.x,
+                    y=content_rect.y + i * (left_h + ctx.row_gap),
+                    width=callout_w,
+                    height=left_h,
+                )
+                c_id = f"{slide.id}_callout_left_{i+1}"
+                c_ports = generate_ports(c_id, c_rect)
+                elements.append(
+                    ElementGeometry(
+                        id=c_id,
+                        semantic_type=ElementType.CARD,
+                        rect=c_rect,
+                        alignment=Alignment.LEFT,
+                        ports=c_ports,
+                        role="callout",
+                        importance="secondary",
+                        content_data={"title": c_title, "body": c_desc},
+                    )
+                )
+                # Connector to center core
+                connectors.append(
+                    ConnectorGeometry(
+                        id=f"conn_left_{i+1}",
+                        start_port_id=f"{c_id}_port_right",
+                        end_port_id=f"{center_id}_port_left",
+                        start_x=c_rect.right,
+                        start_y=c_rect.center_y,
+                        end_x=center_rect.x,
+                        end_y=c_rect.center_y,
+                        connector_type="line",
+                        stroke_width=2,
+                    )
+                )
+
+        # Right Column Callouts
+        if right_items:
+            right_h = (content_rect.height - (ctx.row_gap * (len(right_items) - 1))) // len(right_items)
+            right_x = center_rect.right + ctx.column_gap
+            for i, (c_title, c_desc) in enumerate(right_items):
+                c_rect = Rect(
+                    x=right_x,
+                    y=content_rect.y + i * (right_h + ctx.row_gap),
+                    width=callout_w,
+                    height=right_h,
+                )
+                c_id = f"{slide.id}_callout_right_{i+1}"
+                c_ports = generate_ports(c_id, c_rect)
+                elements.append(
+                    ElementGeometry(
+                        id=c_id,
+                        semantic_type=ElementType.CARD,
+                        rect=c_rect,
+                        alignment=Alignment.LEFT,
+                        ports=c_ports,
+                        role="callout",
+                        importance="secondary",
+                        content_data={"title": c_title, "body": c_desc},
+                    )
+                )
+                # Connector to center core
+                connectors.append(
+                    ConnectorGeometry(
+                        id=f"conn_right_{i+1}",
+                        start_port_id=f"{center_id}_port_right",
+                        end_port_id=f"{c_id}_port_left",
+                        start_x=center_rect.right,
+                        start_y=c_rect.center_y,
+                        end_x=c_rect.x,
+                        end_y=c_rect.center_y,
+                        connector_type="line",
+                        stroke_width=2,
+                    )
+                )
+
+        return elements, connectors, warnings
+
+
+# ---------------------------------------------------------------------------
+# 20. Lifecycle Flow Layout
+# ---------------------------------------------------------------------------
+class LifecycleResolver(BaseArchetypeResolver):
+    """End-to-end cyclical or horizontal progression with sequential step nodes and transition arrows."""
+
+    def resolve(
+        self,
+        slide: Slide,
+        content_rect: Rect,
+        ctx: SpacingContext,
+    ) -> tuple[list[ElementGeometry], list[ConnectorGeometry], list[LayoutWarning]]:
+        elements: list[ElementGeometry] = []
+        connectors: list[ConnectorGeometry] = []
+        warnings: list[LayoutWarning] = []
+
+        stages = [
+            (elem.card_content.title if elem.card_content else f"Stage {i+1}",
+             elem.card_content.body if elem.card_content else "")
+            for i, elem in enumerate(slide.elements)
+        ]
+        if not stages:
+            stages = [
+                ("01  Key Generation", "Client generates asymmetric key pair (RSA/ECC) in secure key storage."),
+                ("02  CSR Submission", "Certificate Signing Request signed by private key sent to Registration Authority."),
+                ("03  CA Validation", "RA verifies domain ownership and identity against corporate directory policy."),
+                ("04  Certificate Issuance", "CA signs certificate and publishes signed bundle to repository."),
+                ("05  Continuous Monitoring", "Automated telemetry tracks expiration, revocation (OCSP), and renewal."),
+            ]
+
+        count = len(stages)
+        card_rects = calculate_card_row(content_rect, count=count, gap=ctx.card_gap)
+
+        for i, (rect, (s_title, s_desc)) in enumerate(zip(card_rects, stages)):
+            node_id = f"{slide.id}_lifecycle_node_{i+1}"
+            ports = generate_ports(node_id, rect)
+
+            elements.append(
+                ElementGeometry(
+                    id=node_id,
+                    semantic_type=ElementType.CARD,
+                    rect=rect,
+                    alignment=Alignment.LEFT,
+                    ports=ports,
+                    role="process_step",
+                    importance="primary" if i == 0 else "secondary",
+                    style_hints={"variant": "lifecycle_card", "step_num": f"0{i+1}"},
+                    content_data={"title": s_title, "body": s_desc},
+                )
+            )
+
+            if i > 0:
+                prev_rect = card_rects[i - 1]
+                prev_id = f"{slide.id}_lifecycle_node_{i}"
+                connectors.append(
+                    ConnectorGeometry(
+                        id=f"conn_lifecycle_{i}",
+                        start_port_id=f"{prev_id}_port_right",
+                        end_port_id=f"{node_id}_port_left",
+                        start_x=prev_rect.right,
+                        start_y=prev_rect.center_y,
+                        end_x=rect.x,
+                        end_y=rect.center_y,
+                        connector_type="arrow",
+                        stroke_width=2,
+                    )
+                )
+
+        return elements, connectors, warnings
+
+
+# ---------------------------------------------------------------------------
+# 21. Decision Flow Layout
+# ---------------------------------------------------------------------------
+class DecisionFlowResolver(BaseArchetypeResolver):
+    """Step-by-step verification pipeline with decision checkpoints and final verdict node."""
+
+    def resolve(
+        self,
+        slide: Slide,
+        content_rect: Rect,
+        ctx: SpacingContext,
+    ) -> tuple[list[ElementGeometry], list[ConnectorGeometry], list[LayoutWarning]]:
+        elements: list[ElementGeometry] = []
+        connectors: list[ConnectorGeometry] = []
+        warnings: list[LayoutWarning] = []
+
+        checkpoints = [
+            (elem.card_content.title if elem.card_content else f"Check {i+1}",
+             elem.card_content.body if elem.card_content else "Validation rule applied against trust store.")
+            for i, elem in enumerate(slide.elements)
+        ]
+        if not checkpoints:
+            checkpoints = [
+                ("1. Certificate Ingestion", "Client receives TLS certificate chain during handshake."),
+                ("2. Trust Store Verification", "Verify issuer CA exists in trusted root anchor repository."),
+                ("3. Signature Validation", "Verify cryptographic digital signature with CA public key."),
+                ("4. Revocation Status (OCSP)", "Query real-time OCSP responder / CRL for revocation status."),
+            ]
+
+        # Left column: checkpoints (68% width); Right column: verdict badge (32% width)
+        left_w = round(content_rect.width * 0.68)
+        right_w = content_rect.width - left_w - ctx.column_gap
+
+        step_h = (content_rect.height - (ctx.row_gap * (len(checkpoints) - 1))) // len(checkpoints)
+        check_rects: list[Rect] = []
+
+        for i, (c_title, c_desc) in enumerate(checkpoints):
+            c_rect = Rect(
+                x=content_rect.x,
+                y=content_rect.y + i * (step_h + ctx.row_gap),
+                width=left_w,
+                height=step_h,
+            )
+            check_rects.append(c_rect)
+            c_id = f"{slide.id}_checkpoint_{i+1}"
+            ports = generate_ports(c_id, c_rect)
+
+            elements.append(
+                ElementGeometry(
+                    id=c_id,
+                    semantic_type=ElementType.CARD,
+                    rect=c_rect,
+                    alignment=Alignment.LEFT,
+                    ports=ports,
+                    role="decision_step",
+                    importance="secondary",
+                    style_hints={"variant": "decision_step"},
+                    content_data={"title": f"🔍  {c_title}", "body": c_desc},
+                )
+            )
+
+            if i > 0:
+                prev_c_rect = check_rects[i - 1]
+                prev_id = f"{slide.id}_checkpoint_{i}"
+                connectors.append(
+                    ConnectorGeometry(
+                        id=f"conn_check_{i}",
+                        start_port_id=f"{prev_id}_port_bottom",
+                        end_port_id=f"{c_id}_port_top",
+                        start_x=prev_c_rect.center_x,
+                        start_y=prev_c_rect.bottom,
+                        end_x=c_rect.center_x,
+                        end_y=c_rect.y,
+                        connector_type="arrow",
+                        stroke_width=2,
+                    )
+                )
+
+        # Right Column: Verdict / Trust Confirmation Card
+        verdict_rect = Rect(
+            x=content_rect.x + left_w + ctx.column_gap,
+            y=content_rect.y,
+            width=right_w,
+            height=content_rect.height,
+        )
+        verdict_id = f"{slide.id}_verdict_card"
+        v_ports = generate_ports(verdict_id, verdict_rect)
+
+        elements.append(
+            ElementGeometry(
+                id=verdict_id,
+                semantic_type=ElementType.CARD,
+                rect=verdict_rect,
+                alignment=Alignment.CENTER,
+                ports=v_ports,
+                role="verdict",
+                importance="primary",
+                style_hints={"variant": "hero_banner", "accent_border": True},
+                content_data={
+                    "title": "✅  VERIFIED & TRUSTED",
+                    "body": "All cryptographic constraints, signature validity, and revocation checks successfully passed.",
+                },
+            )
+        )
+
+        # Connector from last checkpoint to verdict card
+        last_check_id = f"{slide.id}_checkpoint_{len(checkpoints)}"
+        last_r = check_rects[-1]
+        connectors.append(
+            ConnectorGeometry(
+                id="conn_to_verdict",
+                start_port_id=f"{last_check_id}_port_right",
+                end_port_id=f"{verdict_id}_port_left",
+                start_x=last_r.right,
+                start_y=last_r.center_y,
+                end_x=verdict_rect.x,
+                end_y=last_r.center_y,
+                connector_type="arrow",
+                stroke_width=2,
+            )
+        )
+
+        return elements, connectors, warnings
+
+
+# ---------------------------------------------------------------------------
+# 22. Layered Stack Architecture Layout
+# ---------------------------------------------------------------------------
+class LayeredStackResolver(BaseArchetypeResolver):
+    """Stacked hierarchical system architecture layers with layer badges and protocol annotations."""
+
+    def resolve(
+        self,
+        slide: Slide,
+        content_rect: Rect,
+        ctx: SpacingContext,
+    ) -> tuple[list[ElementGeometry], list[ConnectorGeometry], list[LayoutWarning]]:
+        elements: list[ElementGeometry] = []
+        connectors: list[ConnectorGeometry] = []
+        warnings: list[LayoutWarning] = []
+
+        layers = [
+            (elem.card_content.title if elem.card_content else f"Tier {i+1}",
+             elem.card_content.body if elem.card_content else "Architecture layer components and protocol integration.")
+            for i, elem in enumerate(slide.elements)
+        ]
+        if not layers:
+            layers = [
+                ("Application & Client Tier", "Web browsers, microservices, mobile apps, and automated API agents."),
+                ("Management & Automation Layer", "ACME protocol clients, HashiCorp Vault, cert-manager, CI/CD pipelines."),
+                ("Certificate Authority Core (PKI)", "Root CA trust anchor, Subordinate Issuing CAs, and Registration Authority."),
+                ("Validation & Cryptographic Storage", "HSM (Hardware Security Modules), OCSP Responders, and CRL Repositories."),
+            ]
+
+        count = len(layers)
+        layer_h = (content_rect.height - (ctx.row_gap * (count - 1))) // count
+        layer_rects: list[Rect] = []
+
+        for i, (l_title, l_desc) in enumerate(layers):
+            l_rect = Rect(
+                x=content_rect.x,
+                y=content_rect.y + i * (layer_h + ctx.row_gap),
+                width=content_rect.width,
+                height=layer_h,
+            )
+            layer_rects.append(l_rect)
+            l_id = f"{slide.id}_layer_{i+1}"
+            ports = generate_ports(l_id, l_rect)
+
+            elements.append(
+                ElementGeometry(
+                    id=l_id,
+                    semantic_type=ElementType.CARD,
+                    rect=l_rect,
+                    alignment=Alignment.LEFT,
+                    ports=ports,
+                    role="architecture_layer",
+                    importance="primary" if i == 0 else "secondary",
+                    style_hints={"variant": "layer_card", "tier_num": f"L{count - i}"},
+                    content_data={"title": f"LAYER {count - i}: {l_title.upper()}", "body": l_desc},
+                )
+            )
+
+            if i > 0:
+                prev_l_rect = layer_rects[i - 1]
+                prev_id = f"{slide.id}_layer_{i}"
+                connectors.append(
+                    ConnectorGeometry(
+                        id=f"conn_layer_{i}",
+                        start_port_id=f"{prev_id}_port_bottom",
+                        end_port_id=f"{l_id}_port_top",
+                        start_x=content_rect.center_x,
+                        start_y=prev_l_rect.bottom,
+                        end_x=content_rect.center_x,
+                        end_y=l_rect.y,
+                        connector_type="arrow",
+                        stroke_width=2,
+                    )
+                )
+
+        return elements, connectors, warnings
+

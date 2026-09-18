@@ -21,7 +21,9 @@ from backend.app.domain.enums import (
     TimelineStatus,
     VisualType,
 )
+from backend.app.domain.palettes import ProfessionalPaletteGenerator
 from backend.app.domain.presentation import (
+    GenerationMetadata,
     Presentation,
     PresentationMetadata,
     Slide,
@@ -34,6 +36,7 @@ from backend.app.domain.visuals import (
     TimelineMilestone,
     VisualPlan,
 )
+from backend.app.rendering.icons import get_semantic_icon
 
 
 class FakeAIProvider(AIProvider):
@@ -72,7 +75,7 @@ class FakeAIProvider(AIProvider):
 
     @classmethod
     def create_deterministic_presentation(cls, request: PresentationGenerationRequest) -> Presentation:
-        """Create a valid Presentation domain model matching the requested slide count and topic."""
+        """Create a valid, executive-grade Presentation domain model matching the requested slide count and topic."""
         count = request.slide_count
         topic_title = request.topic.split("\n")[0][:60].strip()
 
@@ -84,12 +87,13 @@ class FakeAIProvider(AIProvider):
                 id="slide_1",
                 slide_number=1,
                 title=topic_title,
-                subtitle=f"A Strategic Overview | {request.purpose or 'Executive Briefing'}",
+                subtitle=f"A Strategic and Architectural Overview | {request.purpose or 'Executive Briefing'}",
                 narrative_role=NarrativeRole.TITLE,
                 purpose="Hook audience and frame presentation context",
+                takeaway="Strategic infrastructure scalability hinges on decoupled deterministic architecture.",
                 visual_plan=VisualPlan(
                     visual_type=VisualType.NONE,
-                    intent="Clean title cover layout with prominent typography",
+                    intent="Executive Title Cover Layout with high-impact typography",
                 ),
                 elements=[
                     Element(
@@ -107,24 +111,65 @@ class FakeAIProvider(AIProvider):
                         text_content=TextContent(text=f"Target Audience: {request.audience or 'General'}"),
                     ),
                 ],
-                speaker_notes=f"Welcome everyone. Today we are presenting a strategic blueprint on {topic_title}.",
+                speaker_notes=f"Welcome everyone. Today we are presenting an architectural deep dive on {topic_title}.",
             )
         )
 
-        # Diverse visual templates to cycle through for middle slides
+        # Diverse professional diagram and visual templates for middle slides
         visual_templates = [
-            ("Process Architecture", NarrativeRole.SOLUTION, VisualType.PROCESS_FLOW),
-            ("Key Performance Indicators", NarrativeRole.EVIDENCE, VisualType.KPI),
-            ("Execution Timeline", NarrativeRole.TIMELINE, VisualType.TIMELINE),
-            ("Core Architectural Pillars", NarrativeRole.ARCHITECTURE, VisualType.CARD_GRID),
-            ("Performance Benchmark", NarrativeRole.EVIDENCE, VisualType.COLUMN_CHART),
-            ("Capability Comparison", NarrativeRole.COMPARISON, VisualType.TABLE),
+            (
+                "System Structural Anatomy & Core Parameters",
+                "Detailed schema composition and cryptographic binding properties",
+                NarrativeRole.ARCHITECTURE,
+                VisualType.ANATOMY,
+                "Central structural object with labeled callout components",
+                "Ensure strong component isolation and cryptographic parameter enforcement.",
+            ),
+            (
+                "End-to-End Operational Lifecycle Pipeline",
+                "Step-by-step workflow from provisioning to continuous validation",
+                NarrativeRole.PROCESS,
+                VisualType.LIFECYCLE,
+                "Sequential lifecycle flow with transition arrows",
+                "Automate key lifecycle stages to minimize manual operational overhead.",
+            ),
+            (
+                "Multi-Tier Architecture & Protocol Integration",
+                "Decoupled service layers ensuring high availability and fault isolation",
+                NarrativeRole.SOLUTION,
+                VisualType.LAYERED_STACK,
+                "Stacked hierarchical architecture layers",
+                "Layered separation of concerns guarantees horizontal scale and zero single points of failure.",
+            ),
+            (
+                "Verification Decision Tree & Integrity Checks",
+                "Deterministic validation sequence applied against corporate trust anchors",
+                NarrativeRole.EVIDENCE,
+                VisualType.DECISION_FLOW,
+                "Decision checkpoint pipeline with trust verification node",
+                "Strict multi-checkpoint validation prevents spoofing and stale revocation issues.",
+            ),
+            (
+                "Key Performance Metrics & Operational Velocity",
+                "Empirical benchmarks demonstrating throughput gains and latency reductions",
+                NarrativeRole.EVIDENCE,
+                VisualType.KPI,
+                "High-impact KPI metric dashboard",
+                "Production telemetry demonstrates measurable velocity gains across all pipelines.",
+            ),
+            (
+                "Strategic Architectural Comparison Matrix",
+                "Evaluating capability tradeoffs against legacy operational patterns",
+                NarrativeRole.COMPARISON,
+                VisualType.TABLE,
+                "Structured capability comparison matrix",
+                "Modern decoupled design significantly outperforms monolithic legacy patterns.",
+            ),
         ]
 
         for i in range(2, count):
             template_idx = (i - 2) % len(visual_templates)
-            title_prefix, narrative_role, visual_type = visual_templates[template_idx]
-            slide_title = f"{title_prefix}: Phase {i - 1}"
+            slide_title, slide_subtitle, narrative_role, visual_type, v_intent, takeaway = visual_templates[template_idx]
 
             elements: list[Element] = []
             process_data: ProcessFlowData | None = None
@@ -132,30 +177,158 @@ class FakeAIProvider(AIProvider):
             chart_data: ChartData | None = None
             table_data: TableData | None = None
 
-            if visual_type == VisualType.PROCESS_FLOW:
-                process_data = ProcessFlowData(
-                    direction=ProcessDirection.HORIZONTAL,
-                    steps=[
-                        ProcessStep(
-                            id=f"step_{i}_1",
-                            title="Discovery & Analysis",
-                            description="Evaluate initial ecosystem constraints and strategic requirements.",
-                            order=1,
+            if visual_type == VisualType.ANATOMY:
+                elements = [
+                    Element(
+                        id=f"elem_s{i}_c1",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="primary",
+                        card_content=CardContent(
+                            title="Version & Identity",
+                            body="RFC compliance and Distinguished Name attributes.",
                         ),
-                        ProcessStep(
-                            id=f"step_{i}_2",
-                            title="Architecture Design",
-                            description="Design decoupled domain modules and deterministic execution layers.",
-                            order=2,
+                    ),
+                    Element(
+                        id=f"elem_s{i}_c2",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="secondary",
+                        card_content=CardContent(
+                            title="Key Material & OID",
+                            body="Asymmetric cryptographic key parameters and curve identifiers.",
                         ),
-                        ProcessStep(
-                            id=f"step_{i}_3",
-                            title="Deployment & Scale",
-                            description="Continuous verification, monitoring, and automated delivery.",
-                            order=3,
+                    ),
+                    Element(
+                        id=f"elem_s{i}_c3",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="secondary",
+                        card_content=CardContent(
+                            title="CA Digital Signature",
+                            body="Cryptographic proof of integrity signed by issuing authority.",
                         ),
-                    ],
-                )
+                    ),
+                    Element(
+                        id=f"elem_s{i}_c4",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="secondary",
+                        card_content=CardContent(
+                            title="Validity & Extensions",
+                            body="SAN attributes, Key Usage constraints, and CRL distribution points.",
+                        ),
+                    ),
+                ]
+            elif visual_type == VisualType.LIFECYCLE:
+                elements = [
+                    Element(
+                        id=f"elem_s{i}_step1",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="primary",
+                        card_content=CardContent(
+                            title="01  Key Generation",
+                            body="Client generates asymmetric key pair in secure storage.",
+                        ),
+                    ),
+                    Element(
+                        id=f"elem_s{i}_step2",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="secondary",
+                        card_content=CardContent(
+                            title="02  CSR Validation",
+                            body="RA validates domain ownership and identity policy.",
+                        ),
+                    ),
+                    Element(
+                        id=f"elem_s{i}_step3",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="secondary",
+                        card_content=CardContent(
+                            title="03  CA Issuance",
+                            body="CA signs and publishes certificate bundle.",
+                        ),
+                    ),
+                    Element(
+                        id=f"elem_s{i}_step4",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="secondary",
+                        card_content=CardContent(
+                            title="04  Monitoring",
+                            body="Automated telemetry tracks expiration and OCSP status.",
+                        ),
+                    ),
+                ]
+            elif visual_type == VisualType.LAYERED_STACK:
+                elements = [
+                    Element(
+                        id=f"elem_s{i}_l1",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="primary",
+                        card_content=CardContent(
+                            title="Client & Ingress Layer",
+                            body="Microservices, web clients, and automated API agents.",
+                        ),
+                    ),
+                    Element(
+                        id=f"elem_s{i}_l2",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="secondary",
+                        card_content=CardContent(
+                            title="Orchestration & Vault Tier",
+                            body="Automated policy controllers, secret engines, and cert-manager.",
+                        ),
+                    ),
+                    Element(
+                        id=f"elem_s{i}_l3",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="secondary",
+                        card_content=CardContent(
+                            title="Core Authority Engine",
+                            body="Root and Subordinate CAs managing key issuance pipelines.",
+                        ),
+                    ),
+                ]
+            elif visual_type == VisualType.DECISION_FLOW:
+                elements = [
+                    Element(
+                        id=f"elem_s{i}_df1",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="secondary",
+                        card_content=CardContent(
+                            title="Certificate Ingestion",
+                            body="Client receives TLS payload during handshake.",
+                        ),
+                    ),
+                    Element(
+                        id=f"elem_s{i}_df2",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="secondary",
+                        card_content=CardContent(
+                            title="Trust Anchor Check",
+                            body="Verify issuing CA exists in trusted root store.",
+                        ),
+                    ),
+                    Element(
+                        id=f"elem_s{i}_df3",
+                        type=ElementType.CARD,
+                        role="card",
+                        importance="secondary",
+                        card_content=CardContent(
+                            title="Signature & Revocation",
+                            body="Validate CA signature and check real-time OCSP response.",
+                        ),
+                    ),
+                ]
             elif visual_type == VisualType.KPI:
                 elements = [
                     Element(
@@ -165,7 +338,7 @@ class FakeAIProvider(AIProvider):
                         importance="primary",
                         kpi_content=KPIContent(
                             label="System Availability",
-                            value="99.9%",
+                            value="99.99%",
                             context="+4.2% YoY",
                             trend="up",
                         ),
@@ -176,9 +349,9 @@ class FakeAIProvider(AIProvider):
                         role="stat",
                         importance="primary",
                         kpi_content=KPIContent(
-                            label="P99 Latency",
-                            value="< 50ms",
-                            context="-15ms improvement",
+                            label="P99 Validation Latency",
+                            value="< 12ms",
+                            context="-15ms reduction",
                             trend="down",
                         ),
                     ),
@@ -189,97 +362,23 @@ class FakeAIProvider(AIProvider):
                         importance="primary",
                         kpi_content=KPIContent(
                             label="Throughput Multiplier",
-                            value="10x",
-                            context="Scale-ready baseline",
+                            value="12x",
+                            context="Production baseline",
                             trend="up",
                         ),
                     ),
                 ]
-            elif visual_type == VisualType.TIMELINE:
-                timeline_data = TimelineData(
-                    title="Implementation Milestones",
-                    milestones=[
-                        TimelineMilestone(
-                            label="Phase 1: Inception",
-                            date="Q1 2026",
-                            description="Baseline infrastructure and domain modeling.",
-                            status=TimelineStatus.COMPLETED,
-                        ),
-                        TimelineMilestone(
-                            label="Phase 2: Alpha Rollout",
-                            date="Q2 2026",
-                            description="Early adopter testing and feedback integration.",
-                            status=TimelineStatus.CURRENT,
-                        ),
-                        TimelineMilestone(
-                            label="Phase 3: Production GA",
-                            date="Q3 2026",
-                            description="General availability and enterprise scale.",
-                            status=TimelineStatus.PLANNED,
-                        ),
-                    ],
-                )
-            elif visual_type == VisualType.CARD_GRID:
-                elements = [
-                    Element(
-                        id=f"elem_s{i}_card1",
-                        type=ElementType.CARD,
-                        role="card",
-                        importance="primary",
-                        card_content=CardContent(
-                            title="Reliability",
-                            body="Isolated service boundaries with automatic 1-pass recovery.",
-                            icon="shield",
-                        ),
-                    ),
-                    Element(
-                        id=f"elem_s{i}_card2",
-                        type=ElementType.CARD,
-                        role="card",
-                        importance="primary",
-                        card_content=CardContent(
-                            title="Extensibility",
-                            body="Provider-agnostic interfaces for multi-model AI flexibility.",
-                            icon="puzzle",
-                        ),
-                    ),
-                    Element(
-                        id=f"elem_s{i}_card3",
-                        type=ElementType.CARD,
-                        role="card",
-                        importance="primary",
-                        card_content=CardContent(
-                            title="Observability",
-                            body="Structured telemetry, sanitized logs, and correlation IDs.",
-                            icon="activity",
-                        ),
-                    ),
-                ]
-            elif visual_type == VisualType.COLUMN_CHART:
-                chart_data = ChartData(
-                    chart_type="column",
-                    title="Performance Comparison",
-                    categories=["Legacy System", "V1 Prototype", "Target Architecture"],
-                    series=[
-                        ChartSeries(
-                            name="Throughput (ops/sec)",
-                            values=[120.0, 450.0, 1850.0],
-                        ),
-                    ],
-                    data_source=DataSource.ILLUSTRATIVE,
-                    is_illustrative=True,
-                )
             elif visual_type == VisualType.TABLE:
                 table_data = TableData(
                     columns=[
-                        TableColumn(key="capability", label="Capability"),
-                        TableColumn(key="standard", label="Standard"),
-                        TableColumn(key="enterprise", label="Enterprise"),
+                        TableColumn(key="dim", label="Architecture Dimension"),
+                        TableColumn(key="standard", label="Target Architecture"),
+                        TableColumn(key="legacy", label="Legacy Infrastructure"),
                     ],
                     rows=[
-                        TableRow(cells=["Max Slides", "15", "30"]),
-                        TableRow(cells=["Reference Transfer", "Basic", "Full Fidelity"]),
-                        TableRow(cells=["Export Formats", "PPTX", "PPTX + PDF"]),
+                        TableRow(cells=["Issuance Automation", "Zero-Touch API / ACME", "Manual Ticket Workflow"]),
+                        TableRow(cells=["Revocation Check", "Real-time OCSP Stapling", "Static Uncached CRLs"]),
+                        TableRow(cells=["Failure Resilience", "Decoupled Multi-Tier CAs", "Single Point of Failure"]),
                     ],
                 )
 
@@ -288,12 +387,13 @@ class FakeAIProvider(AIProvider):
                     id=f"slide_{i}",
                     slide_number=i,
                     title=slide_title,
-                    subtitle="Strategic domain analysis and implementation mechanics",
+                    subtitle=slide_subtitle,
                     narrative_role=narrative_role,
-                    purpose=f"Demonstrate {title_prefix.lower()} for the presentation",
+                    purpose=f"Demonstrate {slide_title} for the presentation",
+                    takeaway=takeaway,
                     visual_plan=VisualPlan(
                         visual_type=visual_type,
-                        intent=f"Visual layout for {visual_type.value}",
+                        intent=v_intent,
                         process_flow_data=process_data,
                         timeline_data=timeline_data,
                         chart_data=chart_data,
@@ -304,51 +404,65 @@ class FakeAIProvider(AIProvider):
                 )
             )
 
-        # Final Slide: Conclusion / Call to Action
+        # Final Slide: Conclusion / Strategic Roadmap
         if count >= 2:
             slides.append(
                 Slide(
                     id=f"slide_{count}",
                     slide_number=count,
-                    title="Summary & Next Steps",
-                    subtitle="Key takeaways and tactical roadmap for execution",
+                    title="Executive Summary & Strategic Roadmap",
+                    subtitle="Key operational imperatives and implementation timeline",
                     narrative_role=NarrativeRole.CONCLUSION,
-                    purpose="Summarize key points and present call to action",
+                    purpose="Summarize key points and present strategic roadmap",
+                    takeaway="Adopt a phased automation model to establish enduring security governance and operational velocity.",
                     visual_plan=VisualPlan(
-                        visual_type=VisualType.CARD_GRID,
-                        intent="Summary takeaways in high-impact card format",
+                        visual_type=VisualType.ROADMAP,
+                        intent="Strategic roadmap in phased swimlane format",
                     ),
                     elements=[
                         Element(
-                            id=f"elem_s{count}_summary1",
+                            id=f"elem_s{count}_r1",
                             type=ElementType.CARD,
                             role="card",
                             importance="primary",
                             card_content=CardContent(
-                                title="Next Milestones",
-                                body="Finalize architecture validation and begin deployment rollout.",
+                                title="Phase 1: Architecture",
+                                body="Finalize decoupled authority boundaries and hardware security modules.",
                             ),
                         ),
                         Element(
-                            id=f"elem_s{count}_summary2",
+                            id=f"elem_s{count}_r2",
                             type=ElementType.CARD,
                             role="card",
-                            importance="primary",
+                            importance="secondary",
                             card_content=CardContent(
-                                title="Key Takeaway",
-                                body="Decoupled AI orchestration ensures deterministic generation quality.",
+                                title="Phase 2: Automation",
+                                body="Integrate ACME protocol and cert-manager into CI/CD delivery pipelines.",
+                            ),
+                        ),
+                        Element(
+                            id=f"elem_s{count}_r3",
+                            type=ElementType.CARD,
+                            role="card",
+                            importance="secondary",
+                            card_content=CardContent(
+                                title="Phase 3: Scale",
+                                body="Full enterprise rollout with real-time OCSP monitoring and SLA governance.",
                             ),
                         ),
                     ],
-                    speaker_notes="Thank you for your time. Are there any questions?",
+                    speaker_notes="Thank you for your time. We are now open for questions and strategic discussion.",
                 )
             )
 
-        design_sys = (
-            request.design_context.design_system
-            if request.design_context
-            else DesignSystem()
-        )
+        if request.design_context and request.design_context.design_system:
+            design_sys = request.design_context.design_system
+        else:
+            palette = ProfessionalPaletteGenerator.create_palette(
+                topic=request.topic,
+                audience=request.audience,
+            )
+            design_sys = DesignSystem(palette=palette)
 
         return Presentation(
             schema_version=CURRENT_SCHEMA_VERSION,
@@ -363,8 +477,8 @@ class FakeAIProvider(AIProvider):
             ),
             design_system=design_sys,
             slides=slides,
-            generation_metadata={
-                "provider": "fake_ai_provider",
-                "mode": request.mode,
-            },
+            generation_metadata=GenerationMetadata(
+                provider="fake_ai_provider",
+                mode=request.mode,
+            ),
         )

@@ -1,6 +1,7 @@
 """Gemini AI Provider implementation using modern google-genai SDK."""
 
 import asyncio
+import json
 import logging
 import time
 from typing import Any
@@ -22,6 +23,10 @@ from backend.app.ai.provider import AIProvider
 from backend.app.ai.recovery import OnePassRecoveryHandler
 from backend.app.config import get_settings
 from backend.app.domain.presentation import Presentation
+from backend.app.presentation_intelligence.blueprint import (
+    PresentationBlueprint,
+    blueprint_to_presentation,
+)
 
 logger = logging.getLogger("app.ai.gemini")
 
@@ -29,7 +34,7 @@ MAX_GENERATION_ATTEMPTS = 2
 
 
 class GeminiProvider(AIProvider):
-    """Production Gemini presentation generation provider with 1-pass recovery."""
+    """Production Gemini presentation generation provider with structured blueprint decoding and 1-pass recovery."""
 
     def __init__(
         self,
@@ -40,7 +45,7 @@ class GeminiProvider(AIProvider):
         client: Any | None = None,
     ) -> None:
         settings = get_settings()
-        self._api_key = api_key or settings.gemini_api_key
+        self._api_key = api_key if api_key is not None else settings.gemini_api_key
         self.model = model or settings.gemini_model
         self.timeout_seconds = timeout_seconds or float(settings.ai_timeout_seconds)
         self.max_attempts = min(max(1, max_attempts), 2)  # Strictly bounded to max 2 attempts
@@ -59,11 +64,11 @@ class GeminiProvider(AIProvider):
         return self._client
 
     async def _execute_model_call(self, system_instruction: str, prompt: str) -> str:
-        """Execute async generation call against Gemini API with strict timeout and structured schema."""
+        """Execute async generation call against Gemini API with strict timeout and PresentationBlueprint schema."""
         config = types.GenerateContentConfig(
             system_instruction=system_instruction,
             response_mime_type="application/json",
-            response_schema=Presentation,
+            response_schema=PresentationBlueprint,
             temperature=0.7,
         )
 
@@ -118,7 +123,7 @@ class GeminiProvider(AIProvider):
         self,
         request: PresentationGenerationRequest,
     ) -> Presentation:
-        """Generate a validated Presentation domain model with 1-pass auto-recovery."""
+        """Generate a validated Presentation domain model with blueprint decoding and 1-pass auto-recovery."""
         system_instruction = PromptBuilder.build_system_instruction()
         initial_prompt = PromptBuilder.build_user_prompt(request)
 
@@ -139,7 +144,7 @@ class GeminiProvider(AIProvider):
                 prompt_to_send = PromptBuilder.build_repair_prompt(
                     request=request,
                     raw_output=last_raw_text,
-                    validation_errors=last_error_summary or "Schema validation failed.",
+                    validation_errors=last_error_summary or "Blueprint validation failed.",
                 )
 
             raw_text = await self._execute_model_call(
@@ -148,17 +153,26 @@ class GeminiProvider(AIProvider):
             )
             last_raw_text = raw_text
 
-            presentation, error_summary = OnePassRecoveryHandler.parse_and_validate(raw_text)
+            # 1. Try Blueprint validation first
+            try:
+                blueprint = PresentationBlueprint.model_validate_json(raw_text)
+                presentation = blueprint_to_presentation(blueprint, request)
+                logger.info("AI presentation blueprint validated successfully on attempt %d", attempt)
+                return presentation
+            except Exception as bp_err:
+                logger.warning("Blueprint parse failed: %s. Attempting fallback domain recovery.", str(bp_err))
 
+            # 2. Fallback to direct domain model recovery
+            presentation, error_summary = OnePassRecoveryHandler.parse_and_validate(raw_text)
             if presentation is not None:
-                logger.info("AI presentation generation validated successfully on attempt %d", attempt)
+                logger.info("AI presentation generation validated via domain recovery on attempt %d", attempt)
                 return presentation
 
-            last_error_summary = error_summary
+            last_error_summary = error_summary or str(bp_err)
             logger.warning(
                 "Attempt %d output failed domain validation. Error summary: %s",
                 attempt,
-                error_summary,
+                last_error_summary,
             )
 
         # If we exhausted all attempts

@@ -16,12 +16,12 @@ class CanvasSpec(BaseModel):
     width: int = Field(
         default=DEFAULT_CANVAS_WIDTH,
         description="Virtual canvas width in points (standard 1920)",
-        gt=0,
+        ge=1,
     )
     height: int = Field(
         default=DEFAULT_CANVAS_HEIGHT,
         description="Virtual canvas height in points (standard 1080)",
-        gt=0,
+        ge=1,
     )
     aspect_ratio: str = Field(
         default=DEFAULT_ASPECT_RATIO,

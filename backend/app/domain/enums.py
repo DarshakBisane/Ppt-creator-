@@ -50,6 +50,10 @@ class VisualType(str, Enum):
     QUOTE = "quote"
     IMAGE = "image"
     ICON_GROUP = "icon_group"
+    ANATOMY = "anatomy"
+    DECISION_FLOW = "decision_flow"
+    LIFECYCLE = "lifecycle"
+    LAYERED_STACK = "layered_stack"
 
 
 class ElementType(str, Enum):
@@ -148,3 +152,45 @@ class JobStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+class NarrativeStrategy(str, Enum):
+    """Strategic storytelling arc for deck generation."""
+
+    BUSINESS_EXECUTIVE = "business_executive"
+    TECHNICAL_ARCHITECTURE = "technical_architecture"
+    ACADEMIC_EDUCATIONAL = "academic_educational"
+    RESEARCH_ANALYTICAL = "research_analytical"
+    PRODUCT_PITCH = "product_pitch"
+
+
+class ContentDepth(str, Enum):
+    """Depth level for content generation."""
+
+    CONCISE = "concise"
+    STANDARD = "standard"
+    DETAILED = "detailed"
+    PROFESSIONAL = "professional"
+
+
+class ContentIssueType(str, Enum):
+    """Category of deterministic content QA issues."""
+
+    GENERIC_TITLE = "generic_title"
+    SHALLOW_CONTENT = "shallow_content"
+    EXCESSIVE_CARDS = "excessive_cards"
+    MISSING_TAKEAWAY = "missing_takeaway"
+    DUPLICATE_CONTENT = "duplicate_content"
+    UNSUPPORTED_STAT = "unsupported_stat"
+    WEAK_VISUAL_ALIGNMENT = "weak_visual_alignment"
+    STRUCTURAL_REPETITION = "structural_repetition"
+
+
+class ContentSeverity(str, Enum):
+    """Severity of content QA issues."""
+
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+

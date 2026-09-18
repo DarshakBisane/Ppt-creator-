@@ -47,11 +47,19 @@ def render_card_element(
 
     # Determine background and border colors based on theme and role
     is_hero = elem.style_hints.get("variant") == "hero_banner" or elem.importance == "primary"
+    is_takeaway = elem.style_hints.get("variant") == "takeaway_banner" or elem.role == "takeaway"
     bg_hex = ds.palette.surface.value
-    border_hex = ds.palette.primary.value if is_hero else ds.palette.surface.value
+    if is_takeaway:
+        border_hex = ds.palette.accent.value if ds.palette.accent else ds.palette.primary.value
+    elif is_hero:
+        border_hex = ds.palette.primary.value
+    else:
+        border_hex = ds.palette.surface.value
+
     text_primary_rgb = hex_to_rgb(ds.palette.text_primary.value)
     text_secondary_rgb = hex_to_rgb(ds.palette.text_secondary.value)
     primary_rgb = hex_to_rgb(ds.palette.primary.value)
+    accent_rgb = hex_to_rgb(ds.palette.accent.value if ds.palette.accent else ds.palette.primary.value)
 
     shape = slide_shape_tree.add_shape(
         MSO_SHAPE.ROUNDED_RECTANGLE,
@@ -65,15 +73,15 @@ def render_card_element(
     shape.fill.solid()
     shape.fill.fore_color.rgb = hex_to_rgb(bg_hex)
     shape.line.color.rgb = hex_to_rgb(border_hex)
-    shape.line.width = Pt(1.5 if is_hero else 1.0)
+    shape.line.width = Pt(2.0 if is_takeaway else (1.5 if is_hero else 1.0))
 
     # Text Framing inside card
     tf = shape.text_frame
     tf.word_wrap = True
     tf.margin_left = Inches(0.2)
     tf.margin_right = Inches(0.2)
-    tf.margin_top = Inches(0.2)
-    tf.margin_bottom = Inches(0.2)
+    tf.margin_top = Inches(0.12 if is_takeaway else 0.2)
+    tf.margin_bottom = Inches(0.12 if is_takeaway else 0.2)
 
     content = to_dict(elem.content_data)
     if content:
@@ -84,31 +92,38 @@ def render_card_element(
         step_num = content.get("step_number")
 
         p = tf.paragraphs[0]
-        if step_num:
-            p.text = f"{step_num}  {title_text}"
+        if is_takeaway:
+            p.text = f"KEY TAKEAWAY  •  {body_text}"
+            p.font.name = ds.typography.body.font_family
+            p.font.size = Pt(13)
+            p.font.bold = False
+            p.font.color.rgb = text_primary_rgb
         else:
-            p.text = title_text
+            if step_num:
+                p.text = f"{step_num}  {title_text}"
+            else:
+                p.text = title_text
 
-        p.font.name = ds.typography.heading.font_family
-        p.font.size = Pt(ds.typography.heading.font_size)
-        p.font.bold = True
-        p.font.color.rgb = primary_rgb if is_hero else text_primary_rgb
+            p.font.name = ds.typography.heading.font_family
+            p.font.size = Pt(ds.typography.heading.font_size)
+            p.font.bold = True
+            p.font.color.rgb = primary_rgb if is_hero else text_primary_rgb
 
-        if body_text:
-            p_body = tf.add_paragraph()
-            p_body.text = body_text
-            p_body.font.name = ds.typography.body.font_family
-            p_body.font.size = Pt(ds.typography.body.font_size)
-            p_body.font.color.rgb = text_secondary_rgb
-            p_body.space_before = Pt(6)
+            if body_text:
+                p_body = tf.add_paragraph()
+                p_body.text = body_text
+                p_body.font.name = ds.typography.body.font_family
+                p_body.font.size = Pt(ds.typography.body.font_size)
+                p_body.font.color.rgb = text_secondary_rgb
+                p_body.space_before = Pt(6)
 
-        for b_item in bullets:
-            p_bullet = tf.add_paragraph()
-            p_bullet.text = f"• {b_item}"
-            p_bullet.font.name = ds.typography.body.font_family
-            p_bullet.font.size = Pt(ds.typography.body.font_size - 1)
-            p_bullet.font.color.rgb = text_secondary_rgb
-            p_bullet.space_before = Pt(4)
+            for b_item in bullets:
+                p_bullet = tf.add_paragraph()
+                p_bullet.text = f"• {b_item}"
+                p_bullet.font.name = ds.typography.body.font_family
+                p_bullet.font.size = Pt(ds.typography.body.font_size - 1)
+                p_bullet.font.color.rgb = text_secondary_rgb
+                p_bullet.space_before = Pt(4)
 
     return shape
 
