@@ -24,6 +24,7 @@ from backend.app.layout.spacing import (
     calculate_card_column,
     calculate_card_row,
     calculate_grid,
+    calculate_multi_row_cards,
     calculate_split,
     distribute_horizontal,
     distribute_vertical,
@@ -89,7 +90,7 @@ class BlankResolver(BaseArchetypeResolver):
             )
             elements.append(geom)
         else:
-            card_rects = calculate_card_row(content_rect, count, ctx.card_gap)
+            card_rects = calculate_multi_row_cards(content_rect, count=count, max_cols=4, col_gap=ctx.card_gap, row_gap=ctx.row_gap)
             for elem, r in zip(slide.elements, card_rects):
                 geom = ElementGeometry(
                     id=elem.id,
@@ -323,18 +324,19 @@ class ThreeCardRowResolver(BaseArchetypeResolver):
         elements: list[ElementGeometry] = []
         warnings: list[LayoutWarning] = []
 
-        card_rects = calculate_card_row(content_rect, count=3, gap=ctx.card_gap)
+        count = len(slide.elements) if 1 <= len(slide.elements) <= 3 else 3
+        card_rects = calculate_card_row(content_rect, count=count, gap=ctx.card_gap)
 
         default_cards = [
-            {"title": "Scalability", "body": "Handles multi-tenant workloads with sub-second layout calculation.", "icon": "Layers"},
-            {"title": "Determinism", "body": "Identical layout results for identical inputs with zero drift.", "icon": "Cpu"},
-            {"title": "Extensibility", "body": "Pluggable archetype registry supporting bespoke visual models.", "icon": "Boxes"},
+            {"title": "Core Architecture", "body": "Fundamental operational principles and system infrastructure.", "icon": "Layers"},
+            {"title": "Validation & Security", "body": "Strict protocol compliance and automated verification controls.", "icon": "Shield"},
+            {"title": "Scalable Execution", "body": "High-throughput operational workflows with robust fault tolerance.", "icon": "Workflow"},
         ]
 
         for i, rect in enumerate(card_rects):
             elem = slide.elements[i] if i < len(slide.elements) else None
             card_id = elem.id if elem else f"{slide.id}_card_{i+1}"
-            content = elem.card_content.model_dump() if elem and elem.card_content else default_cards[i]
+            content = elem.card_content.model_dump() if elem and elem.card_content else default_cards[i % len(default_cards)]
 
             geom = ElementGeometry(
                 id=card_id,
@@ -370,16 +372,16 @@ class FourCardGridResolver(BaseArchetypeResolver):
         flat_rects = [cell for row in grid for cell in row]
 
         default_items = [
-            {"title": "Core Domain", "body": "Decoupled business logic without rendering baggage."},
-            {"title": "Layout Engine", "body": "Mathematical 1920x1080 coordinate resolution."},
-            {"title": "PPTX Renderer", "body": "Native OpenXML shape and table generation."},
-            {"title": "Visual QA", "body": "Automated collision and aesthetic validation."},
+            {"title": "Structural Foundations", "body": "Core domain architecture and protocol specifications."},
+            {"title": "Workflow Processing", "body": "Automated end-to-end execution and lifecycle management."},
+            {"title": "Security Boundaries", "body": "Multi-tier validation, cryptographic trust, and access control."},
+            {"title": "Operational Governance", "body": "Continuous auditing, telemetry metrics, and SLA enforcement."},
         ]
 
         for i, rect in enumerate(flat_rects):
             elem = slide.elements[i] if i < len(slide.elements) else None
             card_id = elem.id if elem else f"{slide.id}_grid_card_{i+1}"
-            content = elem.card_content.model_dump() if elem and elem.card_content else default_items[i]
+            content = elem.card_content.model_dump() if elem and elem.card_content else default_items[i % len(default_items)]
 
             elements.append(
                 ElementGeometry(
@@ -416,10 +418,10 @@ class KPIDashboardResolver(BaseArchetypeResolver):
         card_rects = calculate_card_row(content_rect, count=count, gap=ctx.card_gap)
 
         default_kpis = [
-            {"value": "99.9%", "unit": "Uptime", "label": "System Reliability", "trend": "up", "context": "Enterprise SLA target exceeded"},
-            {"value": "<50ms", "unit": "Latency", "label": "Layout Resolution", "trend": "up", "context": "Deterministic algorithmic execution"},
-            {"value": "100%", "unit": "Native", "label": "OpenXML Shapes", "trend": "neutral", "context": "Zero slide rasterization"},
-            {"value": "4.9/5", "unit": "Score", "label": "Design Fidelity", "trend": "up", "context": "Audited by visual QA"},
+            {"value": "99.99%", "unit": "Availability", "label": "Operational Uptime", "trend": "up", "context": "Target benchmark achieved"},
+            {"value": "<10ms", "unit": "Latency", "label": "Verification Speed", "trend": "up", "context": "Sub-second real-time response"},
+            {"value": "100%", "unit": "Verified", "label": "Integrity Compliance", "trend": "neutral", "context": "Zero security deviations"},
+            {"value": "4.9/5", "unit": "Rating", "label": "System Confidence", "trend": "up", "context": "Audited by governance standards"},
         ]
 
         for i, rect in enumerate(card_rects):
@@ -484,6 +486,43 @@ class ComparisonResolver(BaseArchetypeResolver):
         right_id = f"{slide.id}_compare_right"
         vs_id = f"{slide.id}_compare_vs"
 
+        if slide.visual_plan.table_data and len(slide.visual_plan.table_data.columns) >= 3:
+            td = slide.visual_plan.table_data
+            l_col = td.columns[1].label
+            r_col = td.columns[2].label
+            l_pts = [f"{r.cells[0]}: {r.cells[1]}" for r in td.rows if len(r.cells) >= 2]
+            r_pts = [f"{r.cells[0]}: {r.cells[2]}" for r in td.rows if len(r.cells) >= 3]
+            left_data = {"title": l_col, "points": l_pts}
+            right_data = {"title": r_col, "points": r_pts}
+        elif len(slide.elements) >= 2:
+            e1 = slide.elements[0]
+            e2 = slide.elements[1]
+            left_data = {
+                "title": e1.card_content.title if e1.card_content else "Option A / Baseline",
+                "points": [e1.card_content.body] if e1.card_content else ["Standard operational baseline."],
+            }
+            right_data = {
+                "title": e2.card_content.title if e2.card_content else "Option B / Proposed",
+                "points": [e2.card_content.body] if e2.card_content else ["Target architecture with enhanced scalability."],
+            }
+        else:
+            left_data = {
+                "title": "Traditional / Baseline",
+                "points": [
+                    "Manual execution and verification bottlenecks",
+                    "Fragmented architecture and limited visibility",
+                    "Higher operational latency and failure risk",
+                ],
+            }
+            right_data = {
+                "title": "Target Architecture",
+                "points": [
+                    "Automated end-to-end workflow execution",
+                    "Decentralized trust and unified verification",
+                    "High throughput with robust fault tolerance",
+                ],
+            }
+
         elements.append(
             ElementGeometry(
                 id=left_id,
@@ -494,7 +533,7 @@ class ComparisonResolver(BaseArchetypeResolver):
                 role="comparison_left",
                 importance="primary",
                 style_hints={"variant": "comparison_panel", "theme": "surface"},
-                content_data={"title": "Option A / Traditional", "points": ["Manual layout adjustments", "Fragile shape positioning", "High maintenance overhead"]},
+                content_data=left_data,
             )
         )
 
@@ -521,7 +560,7 @@ class ComparisonResolver(BaseArchetypeResolver):
                 role="comparison_right",
                 importance="primary",
                 style_hints={"variant": "comparison_panel", "theme": "primary_tint"},
-                content_data={"title": "Option B / PresenAI", "points": ["Deterministic 1920x1080 layout", "Native OpenXML editable shapes", "Sub-second batch generation"]},
+                content_data=right_data,
             )
         )
 
@@ -546,13 +585,15 @@ class TimelineResolver(BaseArchetypeResolver):
 
         t_data: TimelineData | None = slide.visual_plan.timeline_data
         milestones = t_data.milestones if t_data and t_data.milestones else [
-            TimelineMilestone(label="Phase 1", date="Q1 2026", description="Architecture & Domain Schemas", status=TimelineStatus.COMPLETED),
-            TimelineMilestone(label="Phase 2", date="Q2 2026", description="Deterministic Layout Engine", status=TimelineStatus.CURRENT),
-            TimelineMilestone(label="Phase 3", date="Q3 2026", description="Native PPTX & Visual QA", status=TimelineStatus.PLANNED),
-            TimelineMilestone(label="Phase 4", date="Q4 2026", description="Enterprise Production Release", status=TimelineStatus.PLANNED),
+            TimelineMilestone(label="Phase 1", date="Milestone 1", description="Architecture & Requirements Definition", status=TimelineStatus.COMPLETED),
+            TimelineMilestone(label="Phase 2", date="Milestone 2", description="Core Implementation & Protocol Integration", status=TimelineStatus.CURRENT),
+            TimelineMilestone(label="Phase 3", date="Milestone 3", description="System Verification & Security Validation", status=TimelineStatus.PLANNED),
+            TimelineMilestone(label="Phase 4", date="Milestone 4", description="Production Deployment & Monitoring", status=TimelineStatus.PLANNED),
         ]
 
-        count = len(milestones)
+        count = min(len(milestones), 4)
+        active_milestones = milestones[:count]
+
         spine_y = content_rect.center_y
         spine_id = f"{slide.id}_timeline_spine"
 
@@ -574,7 +615,7 @@ class TimelineResolver(BaseArchetypeResolver):
         card_h = (content_rect.height // 2) - 40
 
         for i, (offset_x, col_w) in enumerate(col_slices):
-            m = milestones[i]
+            m = active_milestones[i]
             node_x = content_rect.x + offset_x + (col_w // 2)
             node_id = f"{slide.id}_node_{i+1}"
             card_id = f"{slide.id}_milestone_{i+1}"
@@ -654,18 +695,30 @@ class ProcessFlowResolver(BaseArchetypeResolver):
         warnings: list[LayoutWarning] = []
 
         pf_data: ProcessFlowData | None = slide.visual_plan.process_flow_data
-        steps = pf_data.steps if pf_data and pf_data.steps else [
-            ProcessStep(id="step_1", title="Ingest & Normalize", description="Parse input topic or reference presentation tokens.", order=1),
-            ProcessStep(id="step_2", title="Semantic Planning", description="Construct structured domain blueprint via AI orchestrator.", order=2),
-            ProcessStep(id="step_3", title="Deterministic Layout", description="Compute 1920x1080 virtual coordinates and port geometry.", order=3),
-            ProcessStep(id="step_4", title="Native PPTX Render", description="Emit fully editable PowerPoint package with zero rasterization.", order=4),
-        ]
+        if pf_data and pf_data.steps:
+            steps = pf_data.steps
+        elif slide.elements:
+            steps = [
+                ProcessStep(
+                    id=f"step_{i+1}",
+                    title=elem.card_content.title if elem.card_content else f"Step {i+1}",
+                    description=elem.card_content.body if elem.card_content else "",
+                    order=i+1,
+                )
+                for i, elem in enumerate(slide.elements)
+            ]
+        else:
+            steps = [
+                ProcessStep(id="step_1", title="Initialization & Request", description="User or client generates secure request with verified identity.", order=1),
+                ProcessStep(id="step_2", title="Verification & Policy", description="Authority validates request parameters and policy compliance.", order=2),
+                ProcessStep(id="step_3", title="Execution & Issuance", description="Core system processes payload and generates signed artifact.", order=3),
+                ProcessStep(id="step_4", title="Deployment & Usage", description="Target repository stores artifact for operational usage.", order=4),
+            ]
 
         count = len(steps)
-        card_rects = calculate_card_row(content_rect, count=count, gap=ctx.card_gap + 20)
+        card_rects = calculate_multi_row_cards(content_rect, count=count, max_cols=4, col_gap=ctx.card_gap + 10, row_gap=ctx.row_gap + 10)
 
-        for i, rect in enumerate(card_rects):
-            step = steps[i]
+        for i, (rect, step) in enumerate(zip(card_rects, steps)):
             step_id = f"{slide.id}_{step.id}"
             ports = generate_ports(step_id, rect)
 
@@ -690,19 +743,35 @@ class ProcessFlowResolver(BaseArchetypeResolver):
             if i > 0:
                 prev_id = f"{slide.id}_{steps[i-1].id}"
                 prev_rect = card_rects[i-1]
-                connectors.append(
-                    ConnectorGeometry(
-                        id=f"{slide.id}_arrow_{i}",
-                        start_port_id=f"{prev_id}_port_right",
-                        end_port_id=f"{step_id}_port_left",
-                        start_x=prev_rect.right,
-                        start_y=prev_rect.center_y,
-                        end_x=rect.x,
-                        end_y=rect.center_y,
-                        connector_type="arrow",
-                        stroke_width=3,
+                
+                if abs(rect.y - prev_rect.y) < 20:
+                    connectors.append(
+                        ConnectorGeometry(
+                            id=f"{slide.id}_arrow_{i}",
+                            start_port_id=f"{prev_id}_port_right",
+                            end_port_id=f"{step_id}_port_left",
+                            start_x=prev_rect.right,
+                            start_y=prev_rect.center_y,
+                            end_x=rect.x,
+                            end_y=rect.center_y,
+                            connector_type="arrow",
+                            stroke_width=3,
+                        )
                     )
-                )
+                else:
+                    connectors.append(
+                        ConnectorGeometry(
+                            id=f"{slide.id}_turnaround_{i}",
+                            start_port_id=f"{prev_id}_port_bottom",
+                            end_port_id=f"{step_id}_port_top",
+                            start_x=prev_rect.center_x,
+                            start_y=prev_rect.bottom,
+                            end_x=rect.center_x,
+                            end_y=rect.y,
+                            connector_type="arrow",
+                            stroke_width=2,
+                        )
+                    )
 
         return elements, connectors, warnings
 
@@ -723,17 +792,24 @@ class FlowchartResolver(BaseArchetypeResolver):
         connectors: list[ConnectorGeometry] = []
         warnings: list[LayoutWarning] = []
 
-        # 3 horizontal stages: Start -> Process/Decision -> End
+        if slide.elements and len(slide.elements) >= 3:
+            stages = [
+                (elem.id, elem.card_content.title if elem.card_content else f"Stage {i+1}",
+                 elem.card_content.body if elem.card_content else "",
+                 ElementType.CARD if i == 1 else ElementType.SHAPE)
+                for i, elem in enumerate(slide.elements[:3])
+            ]
+        else:
+            stages = [
+                ("start_node", "Input & Authentication", "Client initiates secure request payload", ElementType.SHAPE),
+                ("process_node", "Core Verification Engine", "Validation of cryptographic signatures and policy", ElementType.CARD),
+                ("end_node", "Verified Output", "Authorized operation and secure artifact delivery", ElementType.SHAPE),
+            ]
+
         node_w = round(content_rect.width * 0.26)
         node_h = round(content_rect.height * 0.45)
-        gap_x = (content_rect.width - (3 * node_w)) // 2
+        gap_x = (content_rect.width - (len(stages) * node_w)) // max(1, len(stages) - 1)
         y_pos = content_rect.center_y - (node_h // 2)
-
-        stages = [
-            ("start_node", "Input Request", "Topic prompt or reference PPTX file", ElementType.SHAPE),
-            ("process_node", "Layout Resolver", "Deterministic constraint solving & font fitting", ElementType.CARD),
-            ("end_node", "Output PPTX", "Production-grade editable presentation", ElementType.SHAPE),
-        ]
 
         for i, (sid, title, desc, etype) in enumerate(stages):
             node_x = content_rect.x + (i * (node_w + gap_x))
@@ -791,12 +867,13 @@ class HierarchyTreeResolver(BaseArchetypeResolver):
         warnings: list[LayoutWarning] = []
 
         # Tier 0 (Root): Centered at top
-        root_w = round(content_rect.width * 0.4)
-        root_h = round(content_rect.height * 0.3)
+        root_w = round(content_rect.width * 0.44)
+        root_h = round(content_rect.height * 0.28)
         root_x = content_rect.center_x - (root_w // 2)
         root_rect = Rect(x=root_x, y=content_rect.y, width=root_w, height=root_h)
         root_id = f"{slide.id}_root_tier"
 
+        root_title = slide.title.split(":")[0][:40]
         elements.append(
             ElementGeometry(
                 id=root_id,
@@ -806,13 +883,25 @@ class HierarchyTreeResolver(BaseArchetypeResolver):
                 ports=generate_ports(root_id, root_rect),
                 role="tree_root",
                 importance="primary",
-                content_data={"title": "Root Controller", "description": "High-level domain orchestrator"},
+                content_data={"title": root_title, "description": slide.purpose or "Primary domain root anchor and authority controller"},
             )
         )
 
-        # Tier 1 (Children): 3 distributed child cards
-        child_count = 3
-        tier1_y = content_rect.y + root_h + ctx.row_gap + 40
+        if slide.elements:
+            child_items = [
+                (elem.card_content.title if elem.card_content else f"Component {i+1}",
+                 elem.card_content.body if elem.card_content else "Domain architectural subsystem")
+                for i, elem in enumerate(slide.elements[:3])
+            ]
+        else:
+            child_items = [
+                ("Primary Service Controller", "High-level domain logic and workflow coordination"),
+                ("Processing & Validation Engine", "Automated cryptographic verification and policy enforcement"),
+                ("Storage & Audit Repository", "Persistent state management and compliance records"),
+            ]
+
+        child_count = len(child_items)
+        tier1_y = content_rect.y + root_h + ctx.row_gap + 30
         tier1_h = content_rect.bottom - tier1_y
         child_rects = calculate_card_row(
             Rect(x=content_rect.x, y=tier1_y, width=content_rect.width, height=tier1_h),
@@ -820,9 +909,8 @@ class HierarchyTreeResolver(BaseArchetypeResolver):
             gap=ctx.card_gap,
         )
 
-        child_titles = ["AI Planning Subsystem", "Layout Resolution Engine", "OpenXML Shape Renderer"]
-
-        for i, r in enumerate(child_rects):
+        for i, (c_title, c_desc) in enumerate(child_items):
+            r = child_rects[i]
             cid = f"{slide.id}_child_{i+1}"
             ports = generate_ports(cid, r)
             elements.append(
@@ -834,7 +922,7 @@ class HierarchyTreeResolver(BaseArchetypeResolver):
                     ports=ports,
                     role="tree_child",
                     importance="secondary",
-                    content_data={"title": child_titles[i], "description": "Modular decoupled service node"},
+                    content_data={"title": c_title, "description": c_desc},
                 )
             )
 
@@ -872,12 +960,20 @@ class ArchitectureResolver(BaseArchetypeResolver):
         connectors: list[ConnectorGeometry] = []
         warnings: list[LayoutWarning] = []
 
-        layers = [
-            ("layer_presentation", "Presentation & UI Layer", "React 19, Vite, Tailwind CSS v4, Lucide Icons"),
-            ("layer_gateway", "API Gateway & Middleware Layer", "FastAPI, Correlation IDs, Structured Logging"),
-            ("layer_engine", "Layout & Orchestration Engine", "Deterministic 1920x1080 constraint solver"),
-            ("layer_render", "Native PPTX Rendering Layer", "python-pptx, OpenXML shapes, zero rasterization"),
-        ]
+        if slide.elements and len(slide.elements) >= 2:
+            layers = [
+                (elem.id,
+                 elem.card_content.title if elem.card_content else f"Layer {i+1}",
+                 elem.card_content.body if elem.card_content else "Subsystem architecture tier and protocol boundary")
+                for i, elem in enumerate(slide.elements[:4])
+            ]
+        else:
+            layers = [
+                (f"{slide.id}_layer_client", "User & Client Application Layer", "Request submission, credential management, and interactive client UI"),
+                (f"{slide.id}_layer_gateway", "Security & Validation Gateway", "Authentication, request routing, and policy verification"),
+                (f"{slide.id}_layer_core", "Core Authority & Processing Engine", "Digital signature generation, lifecycle transitions, and business logic"),
+                (f"{slide.id}_layer_repository", "Storage, Repository & Revocation", "Certificate registry, CRL/OCSP store, and secure audit logging"),
+            ]
 
         layer_slices = distribute_vertical(content_rect.height, count=len(layers), gap=ctx.row_gap)
 
@@ -889,7 +985,7 @@ class ArchitectureResolver(BaseArchetypeResolver):
                 width=content_rect.width,
                 height=layer_h,
             )
-            layer_id = f"{slide.id}_{sid}"
+            layer_id = f"{slide.id}_arch_{i+1}"
             ports = generate_ports(layer_id, rect)
 
             elements.append(
@@ -900,13 +996,13 @@ class ArchitectureResolver(BaseArchetypeResolver):
                     alignment=Alignment.LEFT,
                     ports=ports,
                     role="architecture_layer",
-                    importance="primary" if i == 2 else "secondary",
+                    importance="primary" if i == (len(layers) // 2) else "secondary",
                     content_data={"title": title, "subtitle": subtitle},
                 )
             )
 
             if i > 0:
-                prev_id = f"{slide.id}_{layers[i-1][0]}"
+                prev_id = f"{slide.id}_arch_{i}"
                 prev_y = content_rect.y + layer_slices[i-1][0] + layer_slices[i-1][1]
                 connectors.append(
                     ConnectorGeometry(
@@ -1024,6 +1120,15 @@ class TableSummaryResolver(BaseArchetypeResolver):
             )
         )
 
+        takeaways = [
+            elem.text_content.text if elem.text_content else (elem.card_content.title if elem.card_content else elem.role)
+            for elem in slide.elements
+        ] if slide.elements else [
+            slide.purpose or "Key structured findings and domain metrics.",
+            "Structured comparison across operational dimensions.",
+            "Verified against domain baseline benchmarks.",
+        ]
+
         elements.append(
             ElementGeometry(
                 id=insight_id,
@@ -1035,11 +1140,7 @@ class TableSummaryResolver(BaseArchetypeResolver):
                 importance="secondary",
                 content_data={
                     "title": "Key Takeaways",
-                    "bullets": [
-                        "Performance benchmarks exceed target SLA.",
-                        "Direct OpenXML parity ensures clean rendering.",
-                        "Scales across enterprise data matrices.",
-                    ],
+                    "bullets": takeaways[:4],
                 },
             )
         )
@@ -1089,6 +1190,11 @@ class ChartInsightResolver(BaseArchetypeResolver):
             )
         )
 
+        insight_text = slide.purpose or (
+            slide.elements[0].card_content.body if slide.elements and slide.elements[0].card_content else
+            "Empirical evaluation demonstrates measurable progress across key domain performance metrics."
+        )
+
         elements.append(
             ElementGeometry(
                 id=insight_id,
@@ -1100,7 +1206,7 @@ class ChartInsightResolver(BaseArchetypeResolver):
                 importance="secondary",
                 content_data={
                     "title": "Data Insights",
-                    "body": "Empirical evaluation demonstrates accelerated velocity and robust constraint adherence across all presentation batches.",
+                    "body": insight_text,
                 },
             )
         )
@@ -1132,7 +1238,7 @@ class QuoteResolver(BaseArchetypeResolver):
         quote_id = f"{slide.id}_quote_card"
 
         quote_text = slide.purpose or (slide.elements[0].text_content.text if slide.elements and slide.elements[0].text_content else "Simplicity is the prerequisite for reliability.")
-        author = slide.subtitle or "System Architect"
+        author = slide.subtitle or "Domain Specialist"
 
         elements.append(
             ElementGeometry(
@@ -1166,11 +1272,19 @@ class RoadmapResolver(BaseArchetypeResolver):
         elements: list[ElementGeometry] = []
         warnings: list[LayoutWarning] = []
 
-        horizons = [
-            ("Horizon 1 (Now)", "Near-Term Priorities", ["Deterministic Layout Engine", "Native PPTX Renderer"]),
-            ("Horizon 2 (Next)", "Mid-Term Capabilities", ["Reference PPT Analyzer", "Semantic Visual Selector"]),
-            ("Horizon 3 (Later)", "Long-Term Expansion", ["Visual QA 3-Pass Auto-Correction", "Enterprise Job Delivery"]),
-        ]
+        if slide.elements and len(slide.elements) >= 2:
+            horizons = [
+                (elem.card_content.title if elem.card_content else f"Phase {i+1}",
+                 elem.card_content.supporting_text if elem.card_content and elem.card_content.supporting_text else f"Horizon {i+1}",
+                 [elem.card_content.body] if elem.card_content and elem.card_content.body else ["Key milestone execution", "Deliverable verification"])
+                for i, elem in enumerate(slide.elements[:4])
+            ]
+        else:
+            horizons = [
+                ("Horizon 1: Foundation", "Near-Term Priorities", ["Initial scoping & requirements", "Core architecture baseline"]),
+                ("Horizon 2: Execution", "Mid-Term Capabilities", ["System integration & rollout", "Validation & performance tuning"]),
+                ("Horizon 3: Expansion", "Long-Term Strategic Scale", ["Operational scaling & automation", "Continuous governance & monitoring"]),
+            ]
 
         lane_rects = calculate_card_row(content_rect, count=len(horizons), gap=ctx.card_gap)
 
@@ -1237,8 +1351,8 @@ class AnatomyResolver(BaseArchetypeResolver):
                 importance="primary",
                 style_hints={"variant": "hero_banner", "accent_border": True},
                 content_data={
-                    "title": f"🏛️  {core_title}",
-                    "body": slide.purpose or "Core structural specification, cryptographic parameters, and signed metadata.",
+                    "title": core_title,
+                    "body": slide.purpose or "Core structural specification, attributes, and key parameters.",
                 },
             )
         )
@@ -1246,15 +1360,15 @@ class AnatomyResolver(BaseArchetypeResolver):
         # Callout items (left and right columns)
         callout_items = [
             (elem.card_content.title if elem.card_content else f"Component {i+1}",
-             elem.card_content.body if elem.card_content else "")
+             elem.card_content.body if elem.card_content else "Functional attribute and operational role.")
             for i, elem in enumerate(slide.elements)
         ]
         if not callout_items:
             callout_items = [
-                ("Version & Serial Number", "Unique identification number assigned by the issuing Certificate Authority."),
-                ("Subject & Issuer Identity", "Distinguished Names (DN) establishing cryptographic entity bindings."),
-                ("Public Key & Algorithm", "Cryptographic key material (RSA 4096 / ECC P-384) and OID parameters."),
-                ("Digital Signature & Validity", "Cryptographic proof of authenticity verified by the root trust anchor."),
+                ("Primary Identifier & Metadata", "Unique identification, serial numbering, and descriptive scope."),
+                ("Identity & Authority Bindings", "Entity attributes and authenticated relationship parameters."),
+                ("Core Parameters & Attributes", "Underlying specifications, operational limits, and settings."),
+                ("Validation & Status Integrity", "Integrity guarantees, verification status, and audit trail."),
             ]
 
         left_items = callout_items[:(len(callout_items) + 1) // 2]
@@ -1348,7 +1462,7 @@ class AnatomyResolver(BaseArchetypeResolver):
 # 20. Lifecycle Flow Layout
 # ---------------------------------------------------------------------------
 class LifecycleResolver(BaseArchetypeResolver):
-    """End-to-end cyclical or horizontal progression with sequential step nodes and transition arrows."""
+    """End-to-end progression with sequential step nodes and transition arrows, supporting multi-row layouts."""
 
     def resolve(
         self,
@@ -1367,20 +1481,26 @@ class LifecycleResolver(BaseArchetypeResolver):
         ]
         if not stages:
             stages = [
-                ("01  Key Generation", "Client generates asymmetric key pair (RSA/ECC) in secure key storage."),
-                ("02  CSR Submission", "Certificate Signing Request signed by private key sent to Registration Authority."),
-                ("03  CA Validation", "RA verifies domain ownership and identity against corporate directory policy."),
-                ("04  Certificate Issuance", "CA signs certificate and publishes signed bundle to repository."),
-                ("05  Continuous Monitoring", "Automated telemetry tracks expiration, revocation (OCSP), and renewal."),
+                ("Stage 1: Ingestion & Planning", "Initial requirement definition, entity registration, and parameter configuration."),
+                ("Stage 2: Validation & Review", "Policy verification, prerequisite validation, and authorization approval."),
+                ("Stage 3: Execution & Issuance", "Core entity generation, cryptographic signing, and operational deployment."),
+                ("Stage 4: Monitoring & Renewal", "Continuous telemetry inspection, lifecycle health tracking, and scheduled maintenance."),
             ]
 
         count = len(stages)
-        card_rects = calculate_card_row(content_rect, count=count, gap=ctx.card_gap)
+        # Content-aware multi-row calculation: clamp max columns to 4
+        if count <= 4:
+            card_rects = calculate_card_row(content_rect, count=count, gap=ctx.card_gap)
+            cols_per_row = count
+        else:
+            card_rects = calculate_multi_row_cards(content_rect, count=count, max_cols=4, col_gap=ctx.card_gap, row_gap=ctx.row_gap)
+            cols_per_row = min(4, (count + 1) // 2)
 
         for i, (rect, (s_title, s_desc)) in enumerate(zip(card_rects, stages)):
             node_id = f"{slide.id}_lifecycle_node_{i+1}"
             ports = generate_ports(node_id, rect)
 
+            step_label = f"0{i+1}" if i < 9 else str(i+1)
             elements.append(
                 ElementGeometry(
                     id=node_id,
@@ -1390,7 +1510,7 @@ class LifecycleResolver(BaseArchetypeResolver):
                     ports=ports,
                     role="process_step",
                     importance="primary" if i == 0 else "secondary",
-                    style_hints={"variant": "lifecycle_card", "step_num": f"0{i+1}"},
+                    style_hints={"variant": "lifecycle_card", "step_num": step_label},
                     content_data={"title": s_title, "body": s_desc},
                 )
             )
@@ -1398,19 +1518,40 @@ class LifecycleResolver(BaseArchetypeResolver):
             if i > 0:
                 prev_rect = card_rects[i - 1]
                 prev_id = f"{slide.id}_lifecycle_node_{i}"
-                connectors.append(
-                    ConnectorGeometry(
-                        id=f"conn_lifecycle_{i}",
-                        start_port_id=f"{prev_id}_port_right",
-                        end_port_id=f"{node_id}_port_left",
-                        start_x=prev_rect.right,
-                        start_y=prev_rect.center_y,
-                        end_x=rect.x,
-                        end_y=rect.center_y,
-                        connector_type="arrow",
-                        stroke_width=2,
+
+                # Determine if this step starts a new row
+                is_row_transition = (i % cols_per_row == 0) and (count > 4)
+
+                if is_row_transition:
+                    # Turnaround connector from previous row end (bottom) to current row start (top)
+                    connectors.append(
+                        ConnectorGeometry(
+                            id=f"conn_lifecycle_{i}",
+                            start_port_id=f"{prev_id}_port_bottom",
+                            end_port_id=f"{node_id}_port_top",
+                            start_x=prev_rect.center_x,
+                            start_y=prev_rect.bottom,
+                            end_x=rect.center_x,
+                            end_y=rect.y,
+                            connector_type="arrow",
+                            stroke_width=2,
+                        )
                     )
-                )
+                else:
+                    # Standard horizontal arrow (left to right)
+                    connectors.append(
+                        ConnectorGeometry(
+                            id=f"conn_lifecycle_{i}",
+                            start_port_id=f"{prev_id}_port_right",
+                            end_port_id=f"{node_id}_port_left",
+                            start_x=prev_rect.right,
+                            start_y=prev_rect.center_y,
+                            end_x=rect.x,
+                            end_y=rect.center_y,
+                            connector_type="arrow",
+                            stroke_width=2,
+                        )
+                    )
 
         return elements, connectors, warnings
 
@@ -1433,15 +1574,15 @@ class DecisionFlowResolver(BaseArchetypeResolver):
 
         checkpoints = [
             (elem.card_content.title if elem.card_content else f"Check {i+1}",
-             elem.card_content.body if elem.card_content else "Validation rule applied against trust store.")
+             elem.card_content.body if elem.card_content else "Validation rule applied against system policy.")
             for i, elem in enumerate(slide.elements)
         ]
         if not checkpoints:
             checkpoints = [
-                ("1. Certificate Ingestion", "Client receives TLS certificate chain during handshake."),
-                ("2. Trust Store Verification", "Verify issuer CA exists in trusted root anchor repository."),
-                ("3. Signature Validation", "Verify cryptographic digital signature with CA public key."),
-                ("4. Revocation Status (OCSP)", "Query real-time OCSP responder / CRL for revocation status."),
+                ("1. Input Ingestion", "System receives incoming request parameters and payload."),
+                ("2. Policy Verification", "Verify parameters against enterprise compliance and authorization policies."),
+                ("3. Signature & Integrity Check", "Validate cryptographic signature and message integrity."),
+                ("4. Real-Time Status Verification", "Query active directory / revocation repository for live status."),
             ]
 
         # Left column: checkpoints (68% width); Right column: verdict badge (32% width)
@@ -1472,7 +1613,7 @@ class DecisionFlowResolver(BaseArchetypeResolver):
                     role="decision_step",
                     importance="secondary",
                     style_hints={"variant": "decision_step"},
-                    content_data={"title": f"🔍  {c_title}", "body": c_desc},
+                    content_data={"title": c_title, "body": c_desc},
                 )
             )
 
@@ -1503,6 +1644,9 @@ class DecisionFlowResolver(BaseArchetypeResolver):
         verdict_id = f"{slide.id}_verdict_card"
         v_ports = generate_ports(verdict_id, verdict_rect)
 
+        verdict_title = "VERIFIED & APPROVED"
+        verdict_body = slide.purpose or "All validation checkpoints, integrity policies, and compliance rules successfully verified."
+
         elements.append(
             ElementGeometry(
                 id=verdict_id,
@@ -1514,8 +1658,8 @@ class DecisionFlowResolver(BaseArchetypeResolver):
                 importance="primary",
                 style_hints={"variant": "hero_banner", "accent_border": True},
                 content_data={
-                    "title": "✅  VERIFIED & TRUSTED",
-                    "body": "All cryptographic constraints, signature validity, and revocation checks successfully passed.",
+                    "title": verdict_title,
+                    "body": verdict_body,
                 },
             )
         )
@@ -1556,17 +1700,18 @@ class LayeredStackResolver(BaseArchetypeResolver):
         connectors: list[ConnectorGeometry] = []
         warnings: list[LayoutWarning] = []
 
-        layers = [
-            (elem.card_content.title if elem.card_content else f"Tier {i+1}",
-             elem.card_content.body if elem.card_content else "Architecture layer components and protocol integration.")
-            for i, elem in enumerate(slide.elements)
-        ]
-        if not layers:
+        if slide.elements and len(slide.elements) >= 2:
             layers = [
-                ("Application & Client Tier", "Web browsers, microservices, mobile apps, and automated API agents."),
-                ("Management & Automation Layer", "ACME protocol clients, HashiCorp Vault, cert-manager, CI/CD pipelines."),
-                ("Certificate Authority Core (PKI)", "Root CA trust anchor, Subordinate Issuing CAs, and Registration Authority."),
-                ("Validation & Cryptographic Storage", "HSM (Hardware Security Modules), OCSP Responders, and CRL Repositories."),
+                (elem.card_content.title if elem.card_content else f"Tier {i+1}",
+                 elem.card_content.body if elem.card_content else "Architecture layer components and protocol integration.")
+                for i, elem in enumerate(slide.elements[:4])
+            ]
+        else:
+            layers = [
+                ("Application & Client Interface Layer", "User access points, client applications, and API consumption endpoints."),
+                ("Service Gateway & Orchestration Layer", "Traffic routing, rate limiting, and business workflow coordination."),
+                ("Core Processing & Logic Engine", "Domain rule execution, transactional processing, and cryptographic functions."),
+                ("Data Persistence & Storage Layer", "Secure relational storage, caching layer, and audit event repository."),
             ]
 
         count = len(layers)
@@ -1616,4 +1761,5 @@ class LayeredStackResolver(BaseArchetypeResolver):
                 )
 
         return elements, connectors, warnings
+
 

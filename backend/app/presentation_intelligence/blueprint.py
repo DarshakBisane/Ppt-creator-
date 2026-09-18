@@ -34,6 +34,7 @@ from backend.app.domain.visuals import (
     TimelineMilestone,
     VisualPlan,
 )
+from backend.app.presentation_intelligence.topic_validator import SemanticTopicValidator
 from backend.app.rendering.icons import get_semantic_icon
 
 
@@ -236,10 +237,6 @@ def blueprint_to_presentation(
                         p_title = f"Component {idx + 1}"
                         p_body = point.strip()
 
-                    # Attach semantic icon
-                    icon_symbol = get_semantic_icon(p_title)
-                    display_title = f"{icon_symbol}  {p_title}" if not p_title.startswith(icon_symbol) else p_title
-
                     elements.append(
                         Element(
                             id=f"elem_s{s_num}_card{idx+1}",
@@ -247,7 +244,7 @@ def blueprint_to_presentation(
                             role="card",
                             importance="primary" if idx == 0 else "secondary",
                             card_content=CardContent(
-                                title=display_title[:80],
+                                title=p_title[:80],
                                 body=p_body[:400],
                             ),
                         )
@@ -298,7 +295,7 @@ def blueprint_to_presentation(
         language="en",
     )
 
-    return Presentation(
+    pres = Presentation(
         schema_version=CURRENT_SCHEMA_VERSION,
         metadata=metadata,
         design_system=design_sys,
@@ -309,3 +306,5 @@ def blueprint_to_presentation(
             model="gemini-2.5-flash",
         ),
     )
+    SemanticTopicValidator.disinfect_presentation(pres)
+    return pres

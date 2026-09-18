@@ -69,6 +69,18 @@ class Settings(BaseSettings):
             return [str(item).strip() for item in v if str(item).strip()]
         return ["http://localhost:5173"]
 
+    def model_post_init(self, __context: object) -> None:
+        """Validate production security invariants and limits."""
+        super().model_post_init(__context)
+        if self.is_production and "*" in self.cors_origins:
+            raise ValueError("Wildcard '*' CORS origins are strictly prohibited in production mode for security reasons.")
+        if self.max_concurrent_jobs <= 0:
+            raise ValueError("max_concurrent_jobs must be a positive integer.")
+        if self.max_job_runtime_seconds <= 0:
+            raise ValueError("max_job_runtime_seconds must be a positive integer.")
+        if self.artifact_ttl_seconds <= 0:
+            raise ValueError("artifact_ttl_seconds must be a positive integer.")
+
     @property
     def is_production(self) -> bool:
         """Check if running in production mode."""

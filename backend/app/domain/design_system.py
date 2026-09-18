@@ -75,7 +75,7 @@ class Palette(BaseModel):
 class TypographyStyle(BaseModel):
     """Typography style specification."""
 
-    font_family: str = Field(default="Aptos", description="Font family name (e.g. Aptos, Arial, Times New Roman)")
+    font_family: str = Field(default="Calibri", description="Font family name (e.g. Calibri, Arial, Georgia)")
     font_size: int = Field(..., ge=1, description="Font size in points")
     font_weight: Literal["normal", "medium", "semibold", "bold", "extrabold"] = Field(
         default="normal"
@@ -88,23 +88,24 @@ class TypographySystem(BaseModel):
     """Complete typography hierarchy."""
 
     display: TypographyStyle = Field(
-        default_factory=lambda: TypographyStyle(font_family="Aptos", font_size=40, font_weight="bold")
+        default_factory=lambda: TypographyStyle(font_family="Calibri", font_size=40, font_weight="bold")
     )
     title: TypographyStyle = Field(
-        default_factory=lambda: TypographyStyle(font_family="Aptos", font_size=32, font_weight="bold")
+        default_factory=lambda: TypographyStyle(font_family="Calibri", font_size=32, font_weight="bold")
     )
     heading: TypographyStyle = Field(
-        default_factory=lambda: TypographyStyle(font_family="Aptos", font_size=22, font_weight="semibold")
+        default_factory=lambda: TypographyStyle(font_family="Calibri", font_size=20, font_weight="semibold")
     )
     body: TypographyStyle = Field(
-        default_factory=lambda: TypographyStyle(font_family="Aptos", font_size=16, font_weight="normal")
-    )
-    caption: TypographyStyle = Field(
-        default_factory=lambda: TypographyStyle(font_family="Aptos", font_size=12, font_weight="normal")
+        default_factory=lambda: TypographyStyle(font_family="Calibri", font_size=15, font_weight="normal")
     )
     label: TypographyStyle = Field(
-        default_factory=lambda: TypographyStyle(font_family="Aptos", font_size=14, font_weight="medium")
+        default_factory=lambda: TypographyStyle(font_family="Calibri", font_size=12, font_weight="medium")
     )
+    caption: TypographyStyle = Field(
+        default_factory=lambda: TypographyStyle(font_family="Calibri", font_size=11, font_weight="normal")
+    )
+
 
 
 class ShapeStyle(BaseModel):

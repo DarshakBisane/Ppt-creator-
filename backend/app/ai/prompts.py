@@ -52,6 +52,11 @@ CORE ARCHITECTURAL RULES:
    - NEVER fabricate real-world empirical statistics or present fictional metrics as verified facts.
    - If factual numerical data was not provided by the user, prioritize qualitative visual models (process flows, comparison matrices, KPI milestones, card grids).
    - If a quantitative chart is requested without user data, set is_illustrative=true.
+
+8. STRICT TOPIC ISOLATION & NO SYSTEM LEAKAGE:
+   - Your generated content MUST purely pertain to the requested user topic.
+   - NEVER mention or leak presentation generator implementation technologies (e.g., React, Vite, FastAPI, Tailwind, python-pptx, OpenXML, 1920x1080 layout engine, constraint solver, correlation IDs) unless the user explicitly requested a presentation about building this PPT generator.
+   - For technical architectures, describe the REAL components of the user's topic domain (e.g. for X.509: Client, Registration Authority, Certificate Authority, CRL/OCSP Repository, Hardware Security Module).
 """
 
     @staticmethod

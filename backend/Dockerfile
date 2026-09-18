@@ -3,16 +3,17 @@
 # Multi-stage / Minimal Debian-slim with non-root security and font determinism
 # ==============================================================================
 
-ARG PYTHON_VERSION=3.14-slim
+ARG PYTHON_VERSION=3.12-slim
 FROM python:${PYTHON_VERSION} AS runtime
 
 # 1. System dependencies:
-# - fonts-dejavu-core / fonts-liberation: deterministic font metrics for Pillow layout engine
+# - fonts-dejavu-core / fonts-liberation / fonts-freefont-ttf: deterministic font metrics for Pillow layout engine
 # - curl: lightweight health checking
 # - ca-certificates: secure HTTPS egress for Gemini API
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     fonts-liberation \
+    fonts-freefont-ttf \
     curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*

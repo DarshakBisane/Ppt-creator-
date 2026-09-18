@@ -50,16 +50,20 @@ def validate_text_overflow(
             continue
 
         r = elem.rect
-        # Card padding allowance
-        pad_x = 24 if elem.semantic_type == ElementType.CARD else 8
-        pad_y = 24 if elem.semantic_type == ElementType.CARD else 8
+        # Internal padding allowance based on semantic type
+        if elem.semantic_type == ElementType.CARD:
+            pad_x, pad_y = 24, 24
+        elif elem.semantic_type in (ElementType.TEXT, ElementType.HEADING):
+            pad_x, pad_y = 4, 2
+        else:
+            pad_x, pad_y = 6, 4
         available_w = max(10, r.width - (pad_x * 2))
         available_h = max(10, r.height - (pad_y * 2))
 
         # Check font size bounds based on element role
-        is_caption = elem.role in ("caption", "footnote", "context", "badge", "narrative_badge")
+        is_caption = elem.role in ("caption", "footnote", "context", "badge", "narrative_badge", "slide_subtitle", "subtitle")
         min_font = MIN_CAPTION_FONT_SIZE if is_caption else MIN_BODY_FONT_SIZE
-        target_font = 20 if elem.semantic_type == ElementType.CARD else (28 if elem.semantic_type == ElementType.HEADING else 16)
+        target_font = 20 if elem.semantic_type == ElementType.CARD else (28 if elem.semantic_type == ElementType.HEADING else 15)
 
         # Estimate required dimensions at target and minimum font sizes
         _, required_h_target, line_count = estimate_text_dimensions(

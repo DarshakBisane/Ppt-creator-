@@ -14,6 +14,7 @@ from backend.app.presentation_intelligence.content_qa import (
     ContentQAEngine,
     default_content_qa,
 )
+from backend.app.presentation_intelligence.topic_validator import SemanticTopicValidator
 from backend.app.presentation_intelligence.models import (
     ContentQAIssue,
     ContentQAResult,
@@ -35,6 +36,7 @@ __all__ = [
     "PresentationQualityScore",
     "PresentationStoryboard",
     "ProcessStepBlueprint",
+    "SemanticTopicValidator",
     "SlideBlueprint",
     "SlideContentQAResult",
     "SlideStoryboardItem",

@@ -104,12 +104,70 @@ def distribute_vertical(total_height: int, count: int, gap: int) -> list[tuple[i
 
 
 def calculate_card_row(bounds: Rect, count: int, gap: int) -> list[Rect]:
-    """Split a bounding box into a single horizontal row of `count` cards."""
-    slices = distribute_horizontal(bounds.width, count, gap)
+    """Split a bounding box into a single horizontal row of `count` cards (max 4)."""
+    if count <= 0:
+        return []
+    # Hard clamp to max 4 cards for a single row to prevent narrow column squishing
+    actual_count = min(count, 4)
+    slices = distribute_horizontal(bounds.width, actual_count, gap)
     return [
         Rect(x=bounds.x + offset_x, y=bounds.y, width=w, height=bounds.height)
         for offset_x, w in slices
     ]
+
+
+def calculate_multi_row_cards(
+    bounds: Rect,
+    count: int,
+    max_cols: int = 4,
+    col_gap: int = 16,
+    row_gap: int = 14,
+) -> list[Rect]:
+    """Calculate balanced multi-row card rectangles for 1 to 8 items, capping at max_cols per row.
+    
+    Examples:
+    - count = 5 -> Row 1 (3 items), Row 2 (2 items)
+    - count = 6 -> Row 1 (3 items), Row 2 (3 items)
+    - count = 7 -> Row 1 (4 items), Row 2 (3 items)
+    - count = 8 -> Row 1 (4 items), Row 2 (4 items)
+    """
+    if count <= 0:
+        return []
+    if count <= max_cols:
+        slices = distribute_horizontal(bounds.width, count, col_gap)
+        return [
+            Rect(x=bounds.x + offset_x, y=bounds.y, width=w, height=bounds.height)
+            for offset_x, w in slices
+        ]
+
+    # Calculate number of rows
+    num_rows = 2 if count <= (max_cols * 2) else ((count + max_cols - 1) // max_cols)
+    row_slices = distribute_vertical(bounds.height, num_rows, row_gap)
+
+    # Distribute count evenly across rows
+    base_per_row = count // num_rows
+    remainder = count % num_rows
+
+    results: list[Rect] = []
+    current_item_idx = 0
+
+    for r_idx, (r_offset_y, r_h) in enumerate(row_slices):
+        items_in_this_row = base_per_row + (1 if r_idx < remainder else 0)
+        row_bounds_y = bounds.y + r_offset_y
+        col_slices = distribute_horizontal(bounds.width, items_in_this_row, col_gap)
+
+        for offset_x, w in col_slices:
+            results.append(
+                Rect(
+                    x=bounds.x + offset_x,
+                    y=row_bounds_y,
+                    width=w,
+                    height=r_h,
+                )
+            )
+            current_item_idx += 1
+
+    return results
 
 
 def calculate_card_column(bounds: Rect, count: int, gap: int) -> list[Rect]:

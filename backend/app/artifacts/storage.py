@@ -22,22 +22,41 @@ SAFE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 SAFE_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]{1,128}$")
 
 
+import urllib.parse
+
 def sanitize_filename(filename: str) -> str:
-    """Sanitize a filename to prevent path traversal and illegal filesystem characters."""
+    """Sanitize a filename to prevent path traversal, directory escapes, and illegal filesystem characters."""
     if not filename:
         return "Presentation.pptx"
     
-    # Strip Windows drive prefix if present (e.g. C:)
-    clean = re.sub(r"^[a-zA-Z]:", "", filename.strip())
-    # Extract the final component of any path
+    # 1. Decode URL-encoded characters (e.g. %2e%2e%2f, %00)
+    try:
+        clean = urllib.parse.unquote(str(filename))
+    except Exception:
+        clean = str(filename)
+        
+    # 2. Strip null bytes and control characters
+    clean = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", clean).strip()
+    
+    # 3. Strip Windows drive prefix (e.g. C:, D:)
+    clean = re.sub(r"^[a-zA-Z]:", "", clean)
+    
+    # 4. Extract the final basename component of any path (handles both / and \)
     clean = clean.replace("\\", "/").rstrip("/").split("/")[-1]
-    # Replace any unsafe characters with underscore
+    
+    # 5. Strip dangerous executable/script extensions
+    clean = re.sub(r"\.(exe|bat|cmd|sh|py|js|php|pl|vbs|scr|dll|so|dylib|bin)$", "", clean, flags=re.IGNORECASE)
+    
+    # 6. Replace any unsafe characters with underscore
     clean = re.sub(r"[^a-zA-Z0-9_.-]", "_", clean)
-    # Defang consecutive dots and trim leading/trailing dots/underscores
+    
+    # 7. Defang consecutive dots and trim leading/trailing dots/underscores
     clean = re.sub(r"\.\.+", "_", clean).strip("._")
     
+    # 8. Enforce proper .pptx extension
     if not clean.lower().endswith(".pptx"):
         clean = f"{clean}.pptx" if clean else "Presentation.pptx"
+        
     return clean[:100]
 
 

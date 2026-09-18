@@ -24,6 +24,7 @@ from backend.app.layout.models import (
 )
 from backend.app.layout.registry import LayoutRegistry, default_layout_registry
 from backend.app.layout.spacing import SpacingContext, generate_ports
+from backend.app.layout.text_measurer import estimate_text_dimensions
 
 
 class SlideLayoutResolver:
@@ -47,7 +48,7 @@ class SlideLayoutResolver:
         # 1. Slide Canvas Specification
         canvas = ds.canvas or CanvasSpec(width=CANVAS_WIDTH, height=CANVAS_HEIGHT)
 
-        # 2. Slide 1 (Title Cover Slide) Dedicated Treatment
+        # 2. Slide 1 (Title Cover Slide) Dedicated Dynamic Treatment
         if slide.narrative_role.value == "title" and slide.slide_number == 1:
             header_rect = None
 
@@ -74,12 +75,19 @@ class SlideLayoutResolver:
                 )
             )
 
-            # Master Title
+            # Master Title with dynamic measurement
+            cover_title_w = CANVAS_WIDTH - (ctx.margin_x * 2)
+            _, measured_c_title_h, _ = estimate_text_dimensions(
+                text=slide.title,
+                font_size=ds.typography.display.font_size,
+                max_width=cover_title_w,
+            )
+            c_title_h = max(90, min(240, measured_c_title_h + 20))
             title_rect = Rect(
                 x=ctx.margin_x,
-                y=160,
-                width=CANVAS_WIDTH - (ctx.margin_x * 2),
-                height=240,
+                y=155,
+                width=cover_title_w,
+                height=c_title_h,
             )
             title_id = f"{slide.id}_title"
             all_elements.append(
@@ -96,13 +104,20 @@ class SlideLayoutResolver:
                 )
             )
 
-            # Master Subtitle
+            # Master Subtitle positioned dynamically below Title
             sub_text = slide.subtitle or slide.purpose or "A Strategic and Architectural Deep Dive"
+            _, measured_c_sub_h, _ = estimate_text_dimensions(
+                text=sub_text,
+                font_size=ds.typography.heading.font_size,
+                max_width=cover_title_w,
+            )
+            c_sub_h = max(50, min(120, measured_c_sub_h + 16))
+            sub_y = title_rect.bottom + 20
             sub_rect = Rect(
                 x=ctx.margin_x,
-                y=420,
-                width=CANVAS_WIDTH - (ctx.margin_x * 2),
-                height=120,
+                y=sub_y,
+                width=cover_title_w,
+                height=c_sub_h,
             )
             sub_id = f"{slide.id}_subtitle"
             all_elements.append(
@@ -119,12 +134,13 @@ class SlideLayoutResolver:
                 )
             )
 
-            # Executive Takeaway / Mandate Card on Title Cover
+            # Executive Takeaway / Mandate Card on Title Cover positioned below Subtitle
             if slide.takeaway:
+                takeaway_y = min(CANVAS_HEIGHT - 160, sub_rect.bottom + 30)
                 takeaway_rect = Rect(
                     x=ctx.margin_x,
-                    y=580,
-                    width=CANVAS_WIDTH - (ctx.margin_x * 2),
+                    y=takeaway_y,
+                    width=cover_title_w,
                     height=90,
                 )
                 takeaway_id = f"{slide.id}_cover_takeaway"
@@ -156,22 +172,25 @@ class SlideLayoutResolver:
                 metadata={"archetype": "TitleCoverResolver"},
             )
 
-        # 3. Standard Body Slides (Header + Visual Core + Bottom Takeaway)
-        header_h = HEADER_HEIGHT
-        header_rect = Rect(
+        # 3. Standard Body Slides (Dynamic Header + Visual Core + Bottom Takeaway)
+        available_header_w = CANVAS_WIDTH - (ctx.margin_x * 2)
+        badge_w = 180
+        title_w = available_header_w - badge_w - ctx.column_gap
+
+        # Measure title dimensions dynamically to handle wrapping cleanly
+        title_font_size = ds.typography.title.font_size
+        _, measured_title_h, title_lines = estimate_text_dimensions(
+            text=slide.title,
+            font_size=title_font_size,
+            max_width=title_w,
+        )
+        title_h = max(44, min(100, measured_title_h + 6))
+
+        title_rect = Rect(
             x=ctx.margin_x,
             y=HEADER_TOP,
-            width=CANVAS_WIDTH - (ctx.margin_x * 2),
-            height=header_h,
-        )
-
-        # Slide Title Element
-        title_w = header_rect.width - 220
-        title_rect = Rect(
-            x=header_rect.x,
-            y=header_rect.y,
             width=title_w,
-            height=50,
+            height=title_h,
         )
         title_id = f"{slide.id}_title"
         all_elements.append(
@@ -187,13 +206,21 @@ class SlideLayoutResolver:
             )
         )
 
-        # Slide Subtitle Element if present
+        # Slide Subtitle Element positioned dynamically BELOW measured title
         if slide.subtitle:
+            sub_font_size = ds.typography.body.font_size
+            _, measured_sub_h, _ = estimate_text_dimensions(
+                text=slide.subtitle,
+                font_size=sub_font_size,
+                max_width=title_w,
+            )
+            sub_h = max(26, min(56, measured_sub_h + 4))
+            sub_y = title_rect.bottom + 4
             sub_rect = Rect(
-                x=header_rect.x,
-                y=header_rect.y + 54,
+                x=ctx.margin_x,
+                y=sub_y,
                 width=title_w,
-                height=36,
+                height=sub_h,
             )
             sub_id = f"{slide.id}_subtitle"
             all_elements.append(
@@ -208,12 +235,14 @@ class SlideLayoutResolver:
                     content_data={"text": slide.subtitle},
                 )
             )
+            header_bottom_y = sub_rect.bottom
+        else:
+            header_bottom_y = title_rect.bottom
 
-        # Narrative Role / Category Pill
-        badge_w = 180
+        # Narrative Role / Category Pill at top right
         badge_rect = Rect(
-            x=header_rect.right - badge_w,
-            y=header_rect.y + 6,
+            x=ctx.margin_x + available_header_w - badge_w,
+            y=HEADER_TOP + 4,
             width=badge_w,
             height=32,
         )
@@ -232,14 +261,21 @@ class SlideLayoutResolver:
             )
         )
 
+        header_rect = Rect(
+            x=ctx.margin_x,
+            y=HEADER_TOP,
+            width=available_header_w,
+            height=header_bottom_y - HEADER_TOP,
+        )
+
         # Content Region calculation
-        content_top_y = header_rect.bottom + ctx.section_gap
+        content_top_y = header_bottom_y + ctx.section_gap
         has_takeaway = bool(slide.takeaway and len(slide.takeaway.strip()) >= 5)
 
         if has_takeaway:
             takeaway_h = 76
             takeaway_y = CONTENT_BOTTOM - takeaway_h
-            content_h = max(200, (takeaway_y - ctx.row_gap) - content_top_y)
+            content_h = max(180, (takeaway_y - ctx.row_gap) - content_top_y)
             content_rect = Rect(
                 x=ctx.margin_x,
                 y=content_top_y,

@@ -72,52 +72,75 @@ class GeminiProvider(AIProvider):
             temperature=0.7,
         )
 
-        try:
-            start_time = time.perf_counter()
-            response = await asyncio.wait_for(
-                self.client.aio.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                    config=config,
-                ),
-                timeout=self.timeout_seconds,
-            )
-            duration_ms = (time.perf_counter() - start_time) * 1000
-            logger.info(
-                "Gemini call completed successfully",
-                extra={
-                    "model": self.model,
-                    "duration_ms": round(duration_ms, 2),
-                },
-            )
+        max_transient_retries = 3
+        for attempt_idx in range(max_transient_retries):
+            try:
+                start_time = time.perf_counter()
+                response = await asyncio.wait_for(
+                    self.client.aio.models.generate_content(
+                        model=self.model,
+                        contents=prompt,
+                        config=config,
+                    ),
+                    timeout=self.timeout_seconds,
+                )
+                duration_ms = (time.perf_counter() - start_time) * 1000
+                logger.info(
+                    "Gemini call completed successfully",
+                    extra={
+                        "model": self.model,
+                        "duration_ms": round(duration_ms, 2),
+                    },
+                )
 
-            raw_text = response.text or ""
-            if not raw_text.strip():
-                raise AIProviderError("Gemini returned empty response text.")
-            return raw_text
+                raw_text = response.text or ""
+                if not raw_text.strip():
+                    raise AIProviderError("Gemini returned empty response text.")
+                return raw_text
 
-        except (asyncio.TimeoutError, TimeoutError) as exc:
-            logger.error("Gemini call timed out after %s seconds", self.timeout_seconds)
-            raise AIProviderTimeoutError(
-                f"AI generation timed out after {self.timeout_seconds} seconds."
-            ) from exc
+            except (asyncio.TimeoutError, TimeoutError) as exc:
+                logger.error("Gemini call timed out after %s seconds", self.timeout_seconds)
+                raise AIProviderTimeoutError(
+                    f"AI generation timed out after {self.timeout_seconds} seconds."
+                ) from exc
 
-        except APIError as api_err:
-            status_code = getattr(api_err, "code", None)
-            err_msg = str(api_err)
-            logger.error("Gemini APIError encountered: code=%s, message=%s", status_code, err_msg)
+            except APIError as api_err:
+                status_code = getattr(api_err, "code", None)
+                err_msg = str(api_err)
+                is_transient = (
+                    status_code in (500, 502, 503, 504)
+                    or "UNAVAILABLE" in err_msg.upper()
+                    or "503" in err_msg
+                    or "HIGH DEMAND" in err_msg.upper()
+                )
 
-            if status_code == 429 or "RESOURCE_EXHAUSTED" in err_msg.upper() or "429" in err_msg:
-                raise AIProviderRateLimitError("Gemini rate limit or quota exceeded.") from api_err
+                if is_transient and attempt_idx < max_transient_retries - 1:
+                    backoff = (attempt_idx + 1) * 2.0
+                    logger.warning(
+                        "Transient Gemini %s error. Retrying in %.1fs (attempt %d/%d)...",
+                        status_code or "UNAVAILABLE",
+                        backoff,
+                        attempt_idx + 1,
+                        max_transient_retries,
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
 
-            raise AIProviderError(f"Gemini API error occurred: {err_msg}") from api_err
+                logger.error("Gemini APIError encountered: code=%s, message=%s", status_code, err_msg)
 
-        except (AIProviderError, AIConfigurationError):
-            raise
+                if status_code == 429 or "RESOURCE_EXHAUSTED" in err_msg.upper() or "429" in err_msg:
+                    raise AIProviderRateLimitError("Gemini rate limit or quota exceeded.") from api_err
 
-        except Exception as unhandled:
-            logger.error("Unexpected error in Gemini generation: %s", str(unhandled))
-            raise AIProviderError(f"Unexpected error communicating with AI provider: {str(unhandled)}") from unhandled
+                raise AIProviderError(f"Gemini API error occurred: {err_msg}") from api_err
+
+            except (AIProviderError, AIConfigurationError):
+                raise
+
+            except Exception as unhandled:
+                logger.error("Unexpected error in Gemini generation: %s", str(unhandled))
+                raise AIProviderError(f"Unexpected error communicating with AI provider: {str(unhandled)}") from unhandled
+
+        raise AIProviderError("Failed to communicate with AI provider after retries.")
 
     async def generate_presentation(
         self,

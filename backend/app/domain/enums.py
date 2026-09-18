@@ -184,6 +184,7 @@ class ContentIssueType(str, Enum):
     UNSUPPORTED_STAT = "unsupported_stat"
     WEAK_VISUAL_ALIGNMENT = "weak_visual_alignment"
     STRUCTURAL_REPETITION = "structural_repetition"
+    TOPIC_LEAKAGE = "topic_leakage"
 
 
 class ContentSeverity(str, Enum):

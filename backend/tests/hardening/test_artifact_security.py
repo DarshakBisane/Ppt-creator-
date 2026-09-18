@@ -9,9 +9,9 @@ from backend.app.core.errors import ArtifactSecurityError, ArtifactValidationErr
 
 def test_sanitize_filename():
     """sanitize_filename cleans unsafe characters, directory traversals, and enforces .pptx extension."""
-    assert sanitize_filename("../evil.exe") == "evil.exe.pptx"
-    assert sanitize_filename("..\\evil.exe") == "evil.exe.pptx"
-    assert sanitize_filename("../../../evil.exe") == "evil.exe.pptx"
+    assert sanitize_filename("../evil.exe") == "evil.pptx"
+    assert sanitize_filename("..\\evil.exe") == "evil.pptx"
+    assert sanitize_filename("../../../evil.exe") == "evil.pptx"
     assert sanitize_filename("..\\..\\evil.pptx") == "evil.pptx"
     assert sanitize_filename("C:\\temp\\evil.pptx") == "evil.pptx"
     assert sanitize_filename("/tmp/evil.pptx") == "evil.pptx"

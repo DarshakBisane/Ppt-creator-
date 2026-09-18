@@ -14,6 +14,7 @@ from backend.app.presentation_intelligence.models import (
     PresentationQualityScore,
     SlideContentQAResult,
 )
+from backend.app.presentation_intelligence.topic_validator import SemanticTopicValidator
 
 GENERIC_TITLE_PATTERNS = [
     re.compile(r"^(Phase\s*\d+|Step\s*\d+|Slide\s*\d+|Topic\s*\d+)$", re.IGNORECASE),
@@ -118,6 +119,12 @@ class ContentQAEngine:
                     )
                     score -= 10.0
                     break
+
+        # 5. Topic Isolation & Context Leakage Check
+        topic_issues = SemanticTopicValidator.validate_slide(slide, getattr(slide, "topic", ""))
+        if topic_issues:
+            issues.extend(topic_issues)
+            score -= 30.0 * len(topic_issues)
 
         score = max(0.0, min(100.0, score))
         passed = score >= 70.0 and not any(i.severity == ContentSeverity.CRITICAL for i in issues)

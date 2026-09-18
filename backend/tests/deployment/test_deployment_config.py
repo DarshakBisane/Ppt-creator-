@@ -144,3 +144,59 @@ def test_unhandled_error_sanitization_in_production() -> None:
     assert "postgres://" not in resp.text
     assert "password" not in resp.text
     assert "Traceback" not in resp.text
+
+
+def test_production_wildcard_cors_prohibited() -> None:
+    """Wildcard '*' CORS origins raise ValueError in production mode."""
+    with pytest.raises(ValueError, match="Wildcard.*CORS"):
+        Settings(environment="production", cors_origins="*")
+
+    with pytest.raises(ValueError, match="Wildcard.*CORS"):
+        Settings(environment="production", cors_origins=["*"])
+
+
+def test_non_positive_resource_limits_rejected() -> None:
+    """Non-positive values for concurrent jobs, TTL, or timeout raise ValueError."""
+    with pytest.raises(ValueError, match="max_concurrent_jobs"):
+        Settings(max_concurrent_jobs=0)
+
+    with pytest.raises(ValueError, match="max_job_runtime_seconds"):
+        Settings(max_job_runtime_seconds=0)
+
+    with pytest.raises(ValueError, match="artifact_ttl_seconds"):
+        Settings(artifact_ttl_seconds=0)
+
+
+def test_sanitize_filename_encoded_traversals_and_executables() -> None:
+    """sanitize_filename prevents URL-encoded directory traversal, null bytes, and executable extensions."""
+    from backend.app.artifacts.storage import sanitize_filename
+
+    # URL-encoded traversal
+    assert sanitize_filename("%2e%2e%2f%2e%2e%2fetc%2fpasswd") == "passwd.pptx"
+    assert sanitize_filename("%2e%2e%5cwindows%5cboot.ini") == "boot.ini.pptx"
+    
+    # Null bytes
+    assert sanitize_filename("safe_report\x00.exe") == "safe_report.pptx"
+    
+    # Executable / script extension stripping
+    assert sanitize_filename("malicious_script.sh") == "malicious_script.pptx"
+    assert sanitize_filename("trojan.exe") == "trojan.pptx"
+    assert sanitize_filename("payload.py") == "payload.pptx"
+    
+    # Legitimate filename preserved
+    assert sanitize_filename("Quantum_Computing_2026.pptx") == "Quantum_Computing_2026.pptx"
+
+
+def test_queued_job_cannot_jump_to_completed() -> None:
+    """A job in QUEUED status cannot jump directly to COMPLETED."""
+    from backend.app.jobs.store import MemoryJobStore
+    from backend.app.ai.context import PresentationGenerationRequest
+    from backend.app.core.errors import JobStateError
+
+    store = MemoryJobStore()
+    req = PresentationGenerationRequest(topic="Illegal Transition Test", slide_count=4)
+    store.create_job("job-illegal-jump-1", req)
+
+    with pytest.raises(JobStateError, match="Invalid state transition"):
+        store.complete_job("job-illegal-jump-1", artifact_path="/tmp/art.pptx", filename="Pres.pptx", slide_count=4)
+
